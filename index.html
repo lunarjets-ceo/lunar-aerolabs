@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Lunar AeroLabs — LAGF800</title>
+<meta name="description" content="Lunar AeroLabs LAGF800 — an 8,000 NM ultra-long-range business jet. Coming soon." />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#000000;
+    --fg:#F2F2EF;
+    --fg-dim:#8A8C90;
+    --silver-1:#EDEEF0;
+    --silver-2:#9AA0A8;
+    --silver-3:#4A4E56;
+    --glow: rgba(150,170,220,0.16);
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box;}
+
+  html,body{
+    margin:0;
+    padding:0;
+    background:var(--bg);
+    color:var(--fg);
+    width:100%;
+    height:100%;
+    overflow-x:hidden;
+  }
+
+  body{
+    font-family:'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+
+  /* Ambient background: vignette + faint starfield */
+  .bg-fx{
+    position:fixed;
+    inset:0;
+    z-index:0;
+    pointer-events:none;
+  }
+
+  .bg-fx .vignette{
+    position:absolute;
+    inset:0;
+    background:
+      radial-gradient(ellipse 120% 80% at 50% 8%, rgba(60,70,95,0.22), rgba(0,0,0,0) 55%),
+      radial-gradient(ellipse 140% 100% at 50% 100%, rgba(0,0,0,0.9), transparent 50%),
+      radial-gradient(ellipse 100% 100% at 50% 50%, #050506 0%, #000000 75%);
+  }
+
+  .bg-fx .stars{
+    position:absolute;
+    inset:0;
+    opacity:0.55;
+    background-image:
+      radial-gradient(1px 1px at 10% 20%, rgba(255,255,255,0.8), transparent 100%),
+      radial-gradient(1px 1px at 22% 65%, rgba(255,255,255,0.6), transparent 100%),
+      radial-gradient(1.5px 1.5px at 35% 15%, rgba(255,255,255,0.7), transparent 100%),
+      radial-gradient(1px 1px at 48% 80%, rgba(255,255,255,0.5), transparent 100%),
+      radial-gradient(1px 1px at 62% 30%, rgba(255,255,255,0.7), transparent 100%),
+      radial-gradient(1.5px 1.5px at 75% 70%, rgba(255,255,255,0.5), transparent 100%),
+      radial-gradient(1px 1px at 85% 18%, rgba(255,255,255,0.8), transparent 100%),
+      radial-gradient(1px 1px at 92% 55%, rgba(255,255,255,0.5), transparent 100%),
+      radial-gradient(1px 1px at 5% 88%, rgba(255,255,255,0.6), transparent 100%),
+      radial-gradient(1px 1px at 55% 92%, rgba(255,255,255,0.4), transparent 100%);
+  }
+
+  .bg-fx .grain{
+    position:absolute;
+    inset:0;
+    opacity:0.035;
+    mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  header{
+    position:relative;
+    z-index:2;
+    display:flex;
+    justify-content:center;
+    padding:clamp(28px, 5vh, 56px) 24px 0;
+    opacity:0;
+    animation: fade-down 1.1s ease-out 0.15s forwards;
+  }
+
+  .wordmark{
+    font-size:clamp(12px, 1.4vw, 15px);
+    font-weight:500;
+    letter-spacing:0.42em;
+    text-transform:uppercase;
+    color:var(--fg);
+  }
+
+  .wordmark span{
+    color:var(--fg-dim);
+    font-weight:300;
+  }
+
+  main{
+    position:relative;
+    z-index:2;
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    text-align:center;
+    padding:24px;
+    gap:0;
+  }
+
+  .stage{
+    position:relative;
+    width:min(1100px, 92vw);
+    display:flex;
+    justify-content:center;
+    align-items:flex-end;
+  }
+
+  .stage .glow{
+    position:absolute;
+    left:50%;
+    bottom:8%;
+    transform:translateX(-50%);
+    width:70%;
+    height:40%;
+    background:radial-gradient(ellipse 50% 50% at 50% 50%, var(--glow), transparent 70%);
+    filter:blur(8px);
+    z-index:0;
+  }
+
+  .jet{
+    position:relative;
+    z-index:1;
+    width:100%;
+    height:auto;
+    display:block;
+    opacity:0;
+    animation:
+      fade-up 1.3s cubic-bezier(0.16,1,0.3,1) 0.5s forwards,
+      float-jet 7s ease-in-out 1.8s infinite;
+  }
+
+  .copy{
+    margin-top:clamp(18px, 4vh, 40px);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    opacity:0;
+    animation: fade-up 1.1s cubic-bezier(0.16,1,0.3,1) 0.9s forwards;
+  }
+
+  .model{
+    font-size:clamp(11px, 1.2vw, 13px);
+    font-weight:500;
+    letter-spacing:0.5em;
+    text-transform:uppercase;
+    color:var(--fg-dim);
+    margin-bottom:clamp(14px, 2.5vh, 22px);
+  }
+
+  .range{
+    font-size:clamp(56px, 12vw, 168px);
+    line-height:0.95;
+    font-weight:200;
+    letter-spacing:-0.01em;
+    margin:0;
+    background:linear-gradient(100deg, var(--silver-2) 0%, var(--fg) 20%, #FFFFFF 38%, var(--fg) 55%, var(--silver-2) 75%, var(--fg) 100%);
+    background-size:250% 100%;
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+    color:var(--fg);
+    animation: shimmer 9s linear 2.5s infinite;
+  }
+
+  .range sup{
+    font-size:0.32em;
+    font-weight:300;
+    letter-spacing:0.05em;
+    margin-left:0.12em;
+    vertical-align:0.62em;
+  }
+
+  .coming-soon{
+    margin-top:clamp(16px, 3vh, 28px);
+    font-size:clamp(12px, 1.6vw, 16px);
+    font-weight:300;
+    letter-spacing:0.55em;
+    text-transform:uppercase;
+    color:var(--fg);
+    position:relative;
+    padding-bottom:clamp(16px, 3vh, 26px);
+  }
+
+  .coming-soon::after{
+    content:"";
+    position:absolute;
+    bottom:0;
+    left:50%;
+    transform:translateX(-50%);
+    width:1px;
+    height:clamp(10px, 2vh, 18px);
+    background:linear-gradient(to bottom, rgba(242,242,239,0.6), transparent);
+  }
+
+  footer{
+    position:relative;
+    z-index:2;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    padding:20px 24px clamp(24px, 5vh, 44px);
+    opacity:0;
+    animation: fade-down 1.1s ease-out 1.2s forwards;
+  }
+
+  .foot-text{
+    font-size:11px;
+    font-weight:300;
+    letter-spacing:0.25em;
+    text-transform:uppercase;
+    color:var(--fg-dim);
+  }
+
+  @keyframes fade-down{
+    from{opacity:0; transform:translateY(-10px);}
+    to{opacity:1; transform:translateY(0);}
+  }
+
+  @keyframes fade-up{
+    from{opacity:0; transform:translateY(16px);}
+    to{opacity:1; transform:translateY(0);}
+  }
+
+  @keyframes float-jet{
+    0%, 100%{ transform:translateY(0px); }
+    50%{ transform:translateY(-10px); }
+  }
+
+  @keyframes shimmer{
+    0%{ background-position: 0% 50%; }
+    100%{ background-position: -250% 50%; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    header, main, .jet, .copy, footer{ animation:none !important; opacity:1 !important; transform:none !important; }
+    .range{ animation:none !important; background-position:0 0; }
+  }
+
+  @media (max-width: 640px){
+    .wordmark{ letter-spacing:0.3em; }
+    .model{ letter-spacing:0.35em; }
+    .coming-soon{ letter-spacing:0.38em; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="bg-fx" aria-hidden="true">
+    <div class="vignette"></div>
+    <div class="stars"></div>
+    <div class="grain"></div>
+  </div>
+
+  <header>
+    <div class="wordmark">LUNAR <span>AEROLABS</span></div>
+  </header>
+
+  <main>
+    <div class="stage">
+      <div class="glow" aria-hidden="true"></div>
+
+      <img class="jet" src="nobgsilhouette.png" alt="Silhouette of the LAGF800 business jet" />
+    </div>
+
+    <div class="copy">
+      <div class="model">LAGF800</div>
+      <h1 class="range">8,000<sup>NM</sup></h1>
+      <div class="coming-soon">Coming&nbsp;to&nbsp;MSFS&nbsp;2024</div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="foot-text">Lunar AeroLabs &copy; 2026</div>
+  </footer>
+
+</body>
+</html>
