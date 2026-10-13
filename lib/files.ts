@@ -54,7 +54,7 @@ export async function sendFileLinks(
       preheader: `${SENDER_NAME} shared "${file.title}" with you.`,
       eyebrow: 'Alpha access',
       heading: p.name ? `${p.name.split(' ')[0]}, your build is ready` : 'Your build is ready',
-      body: `${SENDER_NAME} has shared a file with you. Your download link is personal to you, so please don't forward it.`,
+      body: `${SENDER_NAME} has shared a file with you. Your download link is personal to you, so please don't forward it.\n\nDownloading requires your signed agreement with ${SENDER_NAME}. If you haven't signed it yet, the link will take you to it.`,
       document: {
         title: file.title,
         from: `${file.file_name} · ${formatBytes(Number(file.size_bytes))}`,
@@ -82,11 +82,33 @@ export async function findRecipientByToken(token: string) {
     file_name: string
     blob_pathname: string
     size_bytes: string
+    signed: boolean
+    /** A required document still waiting on this tester's signature, if any. */
+    pending_document_id: string | null
   }>(
     `select r.id as recipient_id, r.email, r.name, f.id as file_id, f.title, f.message, f.file_name,
-            f.blob_pathname, f.size_bytes
+            f.blob_pathname, f.size_bytes,
+            ${HAS_SIGNED} as signed,
+            (${requiredSignatures('rr.document_id')}
+               and rr.status in ('pending', 'viewed') and d.status = 'sent' limit 1) as pending_document_id
        from file_recipients r join shared_files f on f.id = r.file_id
       where r.token_hash = $1 and r.revoked_at is null and f.disabled_at is null`,
     [sha256(token)],
   )
 }
+
+/**
+ * The tester's signing rows for this file's required documents, matched by
+ * email to their (non-revoked) account. Expects `r` = file_recipients and `f` = shared_files.
+ */
+function requiredSignatures(columns: string): string {
+  return `select ${columns}
+    from shared_file_documents sd
+    join recipients rr on rr.document_id = sd.document_id
+    join users u on u.id = rr.user_id
+    join documents d on d.id = sd.document_id
+   where sd.file_id = f.id and u.email = r.email and u.status <> 'revoked'`
+}
+
+/** SQL boolean: the tester has signed at least one of the file's required documents. */
+export const HAS_SIGNED = `exists (${requiredSignatures('1')} and rr.status = 'signed')`

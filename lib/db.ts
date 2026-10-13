@@ -158,6 +158,14 @@ create table if not exists file_downloads (
   user_agent text
 );
 create index if not exists file_downloads_recipient on file_downloads (recipient_id, at);
+
+-- A tester may download only after signing one of the file's required
+-- documents (each tester usually has their own NDA, so it's "any of these").
+create table if not exists shared_file_documents (
+  file_id uuid not null references shared_files(id) on delete cascade,
+  document_id uuid not null references documents(id) on delete cascade,
+  primary key (file_id, document_id)
+);
 `
 
 async function connect(): Promise<Client> {

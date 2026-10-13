@@ -10,8 +10,8 @@ import { appUrl } from '@/lib/email'
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   const r = await findRecipientByToken(token)
-  // The page explains a dead link; send the tester back to it.
-  if (!r) return Response.redirect(appUrl(`/sign/download/${encodeURIComponent(token)}`), 303)
+  // The page explains a dead link or a missing signature; send the tester back to it.
+  if (!r?.signed) return Response.redirect(appUrl(`/sign/download/${encodeURIComponent(token)}`), 303)
 
   const geo = geolocation(request)
   const ip = ipAddress(request) ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null

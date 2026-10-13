@@ -3,7 +3,7 @@
 import { useActionState, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { upload } from '@vercel/blob/client'
-import { createSharedFile, sendFile } from './actions'
+import { createSharedFile, sendFile, setRequiredDocuments } from './actions'
 import { FormError, SubmitButton } from '@/components/ui'
 import { DeliveryList } from '@/components/DeliveryList'
 
@@ -86,13 +86,49 @@ export function SendFileForm({ fileId, everyone }: { fileId: string; everyone: s
       </label>
       {everyone && (
         <button type="button" className="link-button" style={{ alignSelf: 'flex-start' }} onClick={() => setRecipients(everyone)}>
-          Add everyone on the access list
+          Add everyone who has signed a required document
         </button>
       )}
       <FormError error={state?.error} />
       {state?.ok && <p className="form-ok">{state.ok}</p>}
       {state?.deliveries && <DeliveryList deliveries={state.deliveries} />}
       <SubmitButton pendingText="Sending…">Email personal download links</SubmitButton>
+    </form>
+  )
+}
+
+export interface DocumentOption {
+  id: string
+  title: string
+  signers: string
+  required: boolean
+}
+
+export function RequiredDocumentsForm({ fileId, documents }: { fileId: string; documents: DocumentOption[] }) {
+  const [state, action] = useActionState(setRequiredDocuments, undefined)
+  return (
+    <form action={action} className="stack">
+      <input type="hidden" name="fileId" value={fileId} />
+      {documents.length === 0 ? (
+        <p className="muted">No documents have been sent for signature yet.</p>
+      ) : (
+        <ul className="recipient-list">
+          {documents.map((d) => (
+            <li key={d.id}>
+              <label className="checkbox">
+                <input type="checkbox" name="documentId" value={d.id} defaultChecked={d.required} />
+                <span>
+                  {d.title}
+                  {d.signers && <small className="hint"> · signed by {d.signers}</small>}
+                </span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      <FormError error={state?.error} />
+      {state?.ok && <p className="form-ok">{state.ok}</p>}
+      <SubmitButton pendingText="Saving…">Save required documents</SubmitButton>
     </form>
   )
 }

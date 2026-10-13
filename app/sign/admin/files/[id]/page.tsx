@@ -2,10 +2,10 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { requireAdmin } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
-import { formatBytes } from '@/lib/files'
+import { formatBytes, HAS_SIGNED } from '@/lib/files'
 import { Header, StatusBadge, fmtDate } from '@/components/Header'
 import { deleteFile, disableFile, revokeFileLink } from '../actions'
-import { SendFileForm } from '../forms'
+import { RequiredDocumentsForm, SendFileForm, type DocumentOption } from '../forms'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -34,13 +34,15 @@ export default async function AdminFilePage({ params }: { params: Promise<{ id: 
     name: string
     sent_at: Date
     revoked_at: Date | null
+    signed: boolean
     downloads: number
     last_at: Date | null
   }>(
-    `select r.id, r.email, r.name, r.sent_at, r.revoked_at,
+    `select r.id, r.email, r.name, r.sent_at, r.revoked_at, ${HAS_SIGNED} as signed,
             count(d.id)::int as downloads, max(d.at) as last_at
-       from file_recipients r left join file_downloads d on d.recipient_id = r.id
-      where r.file_id = $1 group by r.id order by r.sent_at, r.email`,
+       from file_recipients r join shared_files f on f.id = r.file_id
+       left join file_downloads d on d.recipient_id = r.id
+      where r.file_id = $1 group by r.id, f.id order by r.sent_at, r.email`,
     [id],
   )
   const downloads = await query<{
@@ -60,11 +62,33 @@ export default async function AdminFilePage({ params }: { params: Promise<{ id: 
       where r.file_id = $1 order by d.at desc`,
     [id],
   )
+  const documents = await query<DocumentOption>(
+    `select d.id, d.title, (sd.file_id is not null) as required,
+            coalesce(string_agg(u.email, ', ' order by u.email) filter (where r.status = 'signed'), '') as signers
+       from documents d
+       left join shared_file_documents sd on sd.document_id = d.id and sd.file_id = $1
+       left join recipients r on r.document_id = d.id
+       left join users u on u.id = r.user_id
+      where d.status <> 'draft'
+      group by d.id, sd.file_id order by (sd.file_id is not null) desc, d.created_at desc`,
+    [id],
+  )
+  // Only people who can actually download: signed a required document, account still active.
   const everyone = file.disabled_at
     ? ''
-    : (await query<{ email: string; name: string }>(`select email, name from users where status <> 'revoked' order by email`))
+    : (
+        await query<{ email: string; name: string }>(
+          `select distinct u.email, u.name
+             from shared_file_documents sd
+             join recipients r on r.document_id = sd.document_id and r.status = 'signed'
+             join users u on u.id = r.user_id and u.status <> 'revoked'
+            where sd.file_id = $1 order by u.email`,
+          [id],
+        )
+      )
         .map((u) => (u.name ? `${u.name} <${u.email}>` : u.email))
         .join('\n')
+  const requiredCount = documents.filter((d) => d.required).length
 
   return (
     <>
@@ -89,13 +113,23 @@ export default async function AdminFilePage({ params }: { params: Promise<{ id: 
             </form>
           </div>
         ) : (
-          <section className="panel">
-            <h2>Send to testers</h2>
-            <p className="hint">
-              Each person gets their own link by email. Sending to someone again replaces their old link.
-            </p>
-            <SendFileForm fileId={id} everyone={everyone} />
-          </section>
+          <>
+            <section className="panel">
+              <h2>Required documents · {requiredCount} selected</h2>
+              <p className="hint">
+                A tester can download only after signing at least one of these, matched by the email their link was sent to.
+                {requiredCount === 0 && ' Nothing is selected, so nobody can download yet.'}
+              </p>
+              <RequiredDocumentsForm fileId={id} documents={documents} />
+            </section>
+            <section className="panel">
+              <h2>Send to testers</h2>
+              <p className="hint">
+                Each person gets their own link by email. Sending to someone again replaces their old link.
+              </p>
+              <SendFileForm fileId={id} everyone={everyone} />
+            </section>
+          </>
         )}
 
         <section className="panel">
@@ -110,6 +144,7 @@ export default async function AdminFilePage({ params }: { params: Promise<{ id: 
                 <tr>
                   <th>Tester</th>
                   <th>Link sent</th>
+                  <th>Signed</th>
                   <th>Downloads</th>
                   <th>Last download</th>
                   <th />
@@ -123,6 +158,9 @@ export default async function AdminFilePage({ params }: { params: Promise<{ id: 
                       <small>{r.email}</small>
                     </td>
                     <td>{fmtDate(r.sent_at)}</td>
+                    <td>
+                      <StatusBadge status={r.signed ? 'signed' : 'pending'} />
+                    </td>
                     <td>{r.downloads}</td>
                     <td>{fmtDate(r.last_at)}</td>
                     <td className="actions">
