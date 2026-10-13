@@ -1,2 +1,12 @@
 .claude/
 .DS_Store
+.vercel
+node_modules
+node_modules/
+.next/
+.data/
+.env*
+!.env.example
+next-env.d.ts
+*.tsbuildinfo
+public/pdf.worker.min.mjs
