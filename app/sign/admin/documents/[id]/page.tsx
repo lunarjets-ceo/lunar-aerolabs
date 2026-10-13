@@ -19,12 +19,11 @@ export default async function AdminDocumentPage({ params }: { params: Promise<{ 
     message: string
     status: string
     original_sha256: string
-    completed_sha256: string | null
     created_at: Date
     sent_at: Date | null
     completed_at: Date | null
   }>(
-    `select id, title, message, status, original_sha256, completed_sha256, created_at, sent_at, completed_at
+    `select id, title, message, status, original_sha256, created_at, sent_at, completed_at
        from documents where id = $1`,
     [id],
   )
@@ -37,8 +36,7 @@ export default async function AdminDocumentPage({ params }: { params: Promise<{ 
       [id],
     )
     const fields = await query<FieldInput>(
-      `select r.user_id as "recipientUserId", f.type, f.page, f.x, f.y, f.w, f.h, f.required, f.label
-         from fields f join recipients r on r.id = f.recipient_id where f.document_id = $1`,
+      'select type, page, x, y, w, h, required, label from fields where document_id = $1',
       [id],
     )
     return (
@@ -65,6 +63,8 @@ export default async function AdminDocumentPage({ params }: { params: Promise<{ 
   }
 
   const recipients = await query<{
+    id: string
+    has_copy: boolean
     email: string
     name: string
     status: string
@@ -72,7 +72,7 @@ export default async function AdminDocumentPage({ params }: { params: Promise<{ 
     signed_ip: string | null
     decline_reason: string | null
   }>(
-    `select u.email, u.name, r.status, r.signed_at, r.signed_ip, r.decline_reason
+    `select r.id, r.completed_pdf is not null as has_copy, u.email, u.name, r.status, r.signed_at, r.signed_ip, r.decline_reason
        from recipients r join users u on u.id = r.user_id where r.document_id = $1 order by r.sort_order`,
     [id],
   )
@@ -95,15 +95,10 @@ export default async function AdminDocumentPage({ params }: { params: Promise<{ 
           <a className="btn" href={`/sign/api/documents/${id}/pdf`} target="_blank">
             View original
           </a>
-          {doc.status === 'completed' && (
-            <a className="btn btn-primary" href={`/sign/api/documents/${id}/pdf?version=completed&download`}>
-              Download signed PDF
-            </a>
-          )}
           {doc.status === 'sent' && (
             <form action={voidDocument}>
               <input type="hidden" name="documentId" value={id} />
-              <button className="btn btn-danger">Void envelope</button>
+              <button className="btn btn-danger">Void (stop collecting signatures)</button>
             </form>
           )}
           {doc.status === 'voided' && (
@@ -115,7 +110,10 @@ export default async function AdminDocumentPage({ params }: { params: Promise<{ 
         </div>
 
         <section className="panel">
-          <h2>Recipients</h2>
+          <h2>
+            Submissions · {recipients.filter((r) => r.status === 'signed').length} of {recipients.length} signed
+          </h2>
+          <p className="hint">Each person signed their own private copy. Only you can see all of them.</p>
           <table className="table">
             <thead>
               <tr>
@@ -123,11 +121,12 @@ export default async function AdminDocumentPage({ params }: { params: Promise<{ 
                 <th>Status</th>
                 <th>Signed</th>
                 <th>IP</th>
+                <th />
               </tr>
             </thead>
             <tbody>
               {recipients.map((r) => (
-                <tr key={r.email}>
+                <tr key={r.id}>
                   <td>
                     <strong>{r.name || '—'}</strong>
                     <small>{r.email}</small>
@@ -138,6 +137,18 @@ export default async function AdminDocumentPage({ params }: { params: Promise<{ 
                   </td>
                   <td>{fmtDate(r.signed_at)}</td>
                   <td>{r.signed_ip ?? '—'}</td>
+                  <td className="actions">
+                    {r.has_copy && (
+                      <>
+                        <a className="btn btn-small" href={`/sign/api/documents/${id}/pdf?version=signed&recipient=${r.id}`} target="_blank">
+                          View
+                        </a>
+                        <a className="btn btn-small btn-primary" href={`/sign/api/documents/${id}/pdf?version=signed&recipient=${r.id}&download`}>
+                          Download
+                        </a>
+                      </>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -147,7 +158,6 @@ export default async function AdminDocumentPage({ params }: { params: Promise<{ 
         <section className="panel">
           <h2>Audit trail</h2>
           <p className="hint mono">Original SHA-256: {doc.original_sha256}</p>
-          {doc.completed_sha256 && <p className="hint mono">Signed SHA-256: {doc.completed_sha256}</p>}
           <table className="table compact">
             <tbody>
               {events.map((e, i) => (

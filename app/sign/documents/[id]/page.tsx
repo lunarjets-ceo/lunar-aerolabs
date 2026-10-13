@@ -38,8 +38,8 @@ export default async function SignDocumentPage({ params }: { params: Promise<{ i
 
   const fields = canSign
     ? await query<SignerField>(
-        'select id, type, page, x, y, w, h, required, label from fields where recipient_id = $1 order by page, y, x',
-        [row.recipient_id],
+        'select id, type, page, x, y, w, h, required, label from fields where document_id = $1 order by page, y, x',
+        [id],
       )
     : []
 
@@ -50,7 +50,7 @@ export default async function SignDocumentPage({ params }: { params: Promise<{ i
         <Link href="/sign">← My documents</Link>
         <div className="title-row">
           <h1>{row.title}</h1>
-          <StatusBadge status={row.status === 'sent' ? row.my_status : row.status} />
+          <StatusBadge status={row.status === 'voided' && !['signed', 'declined'].includes(row.my_status) ? 'voided' : row.my_status} />
         </div>
         <p className="muted">From Lunar AeroLabs</p>
         {row.message && <blockquote className="message">{row.message}</blockquote>}
@@ -59,19 +59,26 @@ export default async function SignDocumentPage({ params }: { params: Promise<{ i
           <SignerView documentId={id} fields={fields} signerName={user.name || user.email} />
         ) : (
           <section className="panel">
-            {row.status === 'completed' && (
+            {row.my_status === 'signed' && (
               <>
-                <p>All parties have signed. The signed copy includes a certificate of completion.</p>
-                <a className="btn btn-primary" href={`/sign/api/documents/${id}/pdf?version=completed&download`}>
-                  Download signed PDF
-                </a>
+                <p>
+                  You signed on {fmtDate(row.signed_at)}. Your signed copy includes a certificate of completion with
+                  your signing record.
+                </p>
+                <div className="row">
+                  <a className="btn btn-primary" href={`/sign/api/documents/${id}/pdf?version=signed&download`}>
+                    Download your signed copy
+                  </a>
+                  <a className="btn" href={`/sign/api/documents/${id}/pdf?version=signed`} target="_blank">
+                    View
+                  </a>
+                </div>
               </>
             )}
-            {row.status === 'sent' && row.my_status === 'signed' && (
-              <p>You signed on {fmtDate(row.signed_at)}. We'll email you when everyone has signed.</p>
-            )}
             {row.my_status === 'declined' && <p>You declined to sign this document.</p>}
-            {row.status === 'voided' && <p>Lunar AeroLabs voided this document. No further action is needed.</p>}
+            {row.status === 'voided' && !['signed', 'declined'].includes(row.my_status) && (
+              <p>Lunar AeroLabs voided this document. No further action is needed.</p>
+            )}
           </section>
         )}
       </main>

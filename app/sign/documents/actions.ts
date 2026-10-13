@@ -1,12 +1,12 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { clientInfo, requireUser } from '@/lib/auth'
+import { clientInfo, requireUser, type User } from '@/lib/auth'
 import { query, queryOne, transaction } from '@/lib/db'
 import { sha256 } from '@/lib/crypto'
 import { audit } from '@/lib/audit'
 import { buildCompletedPdf, type FieldRow } from '@/lib/pdf'
-import { appUrl, sendEmail } from '@/lib/email'
+import { appUrl, sendEmail, SENDER_NAME } from '@/lib/email'
 
 export type SignResult = { error?: string; done?: boolean } | undefined
 
@@ -34,8 +34,8 @@ export async function submitSignature(
   if (!consent) return { error: 'You must agree to sign electronically.' }
 
   const fields = await query<{ id: string; type: FieldRow['type']; required: boolean }>(
-    'select id, type, required from fields where recipient_id = $1',
-    [recipient.id],
+    'select id, type, required from fields where document_id = $1',
+    [documentId],
   )
   const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' })
   const resolved: [string, string | null][] = []
@@ -53,16 +53,29 @@ export async function submitSignature(
   }
 
   const { ip } = await clientInfo()
-  await transaction(async (tx) => {
-    for (const [id, v] of resolved) await tx.query('update fields set value = $2 where id = $1', [id, v])
-    await tx.query(`update recipients set status = 'signed', signed_at = now(), signed_ip = $2 where id = $1`, [
-      recipient.id,
-      ip,
-    ])
+  const claimed = await transaction(async (tx) => {
+    // The status guard makes a double submit a no-op.
+    const [row] = await tx.query(
+      `update recipients set status = 'signed', signed_at = now(), signed_ip = $2
+        where id = $1 and status in ('pending', 'viewed') returning id`,
+      [recipient.id, ip],
+    )
+    if (!row) return false
+    for (const [fieldId, v] of resolved) {
+      await tx.query('insert into field_values (recipient_id, field_id, value) values ($1, $2, $3)', [
+        recipient.id,
+        fieldId,
+        v,
+      ])
+    }
     await audit(documentId, user, 'document.signed', '', tx)
+    return true
   })
+  if (!claimed) return { error: 'You have already responded.' }
 
-  await finalizeIfComplete(documentId)
+  await buildRecipientCopy(documentId, recipient.id, user)
+  await notifySubmission(documentId, recipient.title, user)
+  await completeIfAllResponded(documentId)
   revalidatePath(`/sign/documents/${documentId}`)
   return { done: true }
 }
@@ -79,83 +92,131 @@ export async function declineDocument(documentId: string, reason: string): Promi
   ])
   await audit(documentId, user, 'document.declined', reason.slice(0, 200))
 
-  const owner = await queryOne<{ email: string }>(
-    'select u.email from documents d join users u on u.id = d.created_by where d.id = $1',
-    [documentId],
-  )
+  const owner = await documentOwner(documentId)
   if (owner) {
     await sendEmail({
-      to: owner.email,
+      to: owner,
       subject: `Declined: ${recipient.title}`,
       preheader: `${user.name || user.email} declined to sign "${recipient.title}".`,
       eyebrow: 'Declined',
       heading: `${user.name || user.email} declined to sign`,
-      body: 'The envelope is on hold. Review the details, then void it and send a revised version if needed.',
-      document: { title: recipient.title, from: user.email, message: reason || 'No reason was given.', status: 'Declined', tone: 'bad' },
-      ctaLabel: 'View envelope',
+      body: "Their copy is closed. Everyone else's copies are unaffected.",
+      document: {
+        title: recipient.title,
+        from: user.email,
+        message: reason || 'No reason was given.',
+        status: 'Declined',
+        tone: 'bad',
+      },
+      ctaLabel: 'View submissions',
       ctaUrl: appUrl(`/sign/admin/documents/${documentId}`),
     })
   }
+  await completeIfAllResponded(documentId)
   revalidatePath(`/sign/documents/${documentId}`)
   return { done: true }
 }
 
-async function finalizeIfComplete(documentId: string): Promise<void> {
-  const pending = await queryOne(`select 1 from recipients where document_id = $1 and status <> 'signed'`, [documentId])
-  if (pending) return
+async function documentOwner(documentId: string): Promise<string | null> {
+  const row = await queryOne<{ email: string }>(
+    'select u.email from documents d join users u on u.id = d.created_by where d.id = $1',
+    [documentId],
+  )
+  return row?.email ?? null
+}
 
-  // Claim the document so concurrent final signatures don't both build the PDF.
+/** Builds the signer's private signed PDF: only their answers and only their audit trail. */
+async function buildRecipientCopy(documentId: string, recipientId: string, user: User): Promise<void> {
   const doc = await queryOne<{ title: string; original_pdf: Uint8Array; original_sha256: string }>(
-    `update documents set status = 'completed', completed_at = now()
-      where id = $1 and status = 'sent'
-      returning title, original_pdf, original_sha256`,
+    'select title, original_pdf, original_sha256 from documents where id = $1',
     [documentId],
   )
-  if (!doc) return
+  const signer = await queryOne<{ signed_at: Date; signed_ip: string | null }>(
+    'select signed_at, signed_ip from recipients where id = $1',
+    [recipientId],
+  )
+  if (!doc || !signer) return
 
-  const fields = await query<FieldRow>('select id, type, page, x, y, w, h, value from fields where document_id = $1', [documentId])
-  const signers = await query<{ name: string; email: string; signed_at: Date; signed_ip: string | null }>(
-    `select u.name, u.email, r.signed_at, r.signed_ip from recipients r join users u on u.id = r.user_id
-      where r.document_id = $1 order by r.sort_order`,
-    [documentId],
+  const fields = await query<FieldRow>(
+    `select f.id, f.type, f.page, f.x, f.y, f.w, f.h, v.value
+       from fields f left join field_values v on v.field_id = f.id and v.recipient_id = $2
+      where f.document_id = $1`,
+    [documentId, recipientId],
   )
-  await audit(documentId, null, 'document.completed')
+  // Admin actions appear as the company; other signers' events are left out entirely.
   const events = await query<{ at: Date; email: string | null; action: string; ip: string | null }>(
-    'select at, email, action, ip from audit_events where document_id = $1 order by at, id',
-    [documentId],
+    `select at,
+            case when user_id = $2 then email else $3 end as email,
+            action,
+            case when user_id = $2 then ip end as ip
+       from audit_events
+      where document_id = $1 and (user_id = $2 or action in ('document.uploaded', 'document.sent'))
+      order by at, id`,
+    [documentId, user.id, SENDER_NAME],
   )
 
   const pdf = await buildCompletedPdf({
     original: new Uint8Array(doc.original_pdf),
-    documentId,
+    copyId: recipientId,
     title: doc.title,
     originalSha256: doc.original_sha256,
     fields,
-    signers,
+    signers: [{ name: user.name, email: user.email, signed_at: signer.signed_at, signed_ip: signer.signed_ip }],
     events,
   })
-  await query('update documents set completed_pdf = $2, completed_sha256 = $3 where id = $1', [
-    documentId,
+  await query('update recipients set completed_pdf = $2, completed_sha256 = $3 where id = $1', [
+    recipientId,
     Buffer.from(pdf),
     sha256(pdf),
   ])
+}
 
-  const owner = await queryOne<{ email: string }>(
-    'select u.email from documents d join users u on u.id = d.created_by where d.id = $1',
+async function notifySubmission(documentId: string, title: string, user: User): Promise<void> {
+  const counts = await queryOne<{ signed: number; total: number }>(
+    `select count(*) filter (where status = 'signed')::int as signed, count(*)::int as total
+       from recipients where document_id = $1`,
     [documentId],
   )
-  const notify = new Set([...signers.map((s) => s.email), ...(owner ? [owner.email] : [])])
-  for (const email of notify) {
+  const progress = counts ? `${counts.signed} of ${counts.total} signed` : undefined
+
+  await sendEmail({
+    to: user.email,
+    subject: `Signed: ${title}`,
+    preheader: `Your signed copy of "${title}" is ready.`,
+    eyebrow: 'Completed',
+    heading: 'Thank you for signing',
+    body: 'Your signature has been recorded. Your signed copy, with its certificate of completion, is ready to download.',
+    document: { title, from: SENDER_NAME, status: 'Signed', tone: 'ok' },
+    ctaLabel: 'Download your signed copy',
+    ctaUrl: appUrl(`/sign/documents/${documentId}`),
+  })
+
+  const owner = await documentOwner(documentId)
+  if (owner) {
     await sendEmail({
-      to: email,
-      subject: `Completed: ${doc.title}`,
-      preheader: `Everyone has signed "${doc.title}". Your signed copy is ready.`,
-      eyebrow: 'Completed',
-      heading: 'All parties have signed',
-      body: 'The document is complete. Sign in to download the final signed PDF, which includes a certificate of completion with the full audit trail.',
-      document: { title: doc.title, status: `Signed by ${signers.length} ${signers.length === 1 ? 'party' : 'parties'}`, tone: 'ok' },
-      ctaLabel: 'Download signed copy',
-      ctaUrl: appUrl(`/sign/documents/${documentId}`),
+      to: owner,
+      subject: `${user.name || user.email} signed: ${title}`,
+      preheader: `New submission from ${user.name || user.email}${progress ? ` · ${progress}` : ''}.`,
+      eyebrow: 'New submission',
+      heading: `${user.name || user.email} signed`,
+      body: 'Their individual signed copy is ready to review and download.',
+      document: { title, from: user.email, status: progress, tone: 'ok' },
+      ctaLabel: 'View submission',
+      ctaUrl: appUrl(`/sign/admin/documents/${documentId}`),
     })
   }
+}
+
+/** The document is complete once every recipient has signed or declined. */
+async function completeIfAllResponded(documentId: string): Promise<void> {
+  const waiting = await queryOne(
+    `select 1 from recipients where document_id = $1 and status in ('pending', 'viewed')`,
+    [documentId],
+  )
+  if (waiting) return
+  const done = await queryOne(
+    `update documents set status = 'completed', completed_at = now() where id = $1 and status = 'sent' returning id`,
+    [documentId],
+  )
+  if (done) await audit(documentId, null, 'document.completed')
 }

@@ -118,7 +118,6 @@ export async function uploadDocument(_: ActionResult, fd: FormData): Promise<Act
 }
 
 export interface FieldInput {
-  recipientUserId: string
   type: 'signature' | 'initials' | 'text' | 'date' | 'name' | 'checkbox'
   page: number
   x: number
@@ -156,7 +155,7 @@ export async function saveDraft(documentId: string, input: DraftInput): Promise<
   if (allowed.length !== recipientIds.length) return { error: 'Every recipient must be on the access list.' }
 
   for (const f of input.fields) {
-    if (!FIELD_TYPES.has(f.type) || !recipientIds.includes(f.recipientUserId)) return { error: 'Invalid field.' }
+    if (!FIELD_TYPES.has(f.type)) return { error: 'Invalid field.' }
     if (!Number.isInteger(f.page) || f.page < 1 || f.page > doc.page_count) return { error: 'Invalid field page.' }
   }
 
@@ -167,21 +166,21 @@ export async function saveDraft(documentId: string, input: DraftInput): Promise<
       input.message.slice(0, 2000),
     ])
     await tx.query('delete from recipients where document_id = $1', [documentId])
-    const recipientRowId = new Map<string, string>()
+    await tx.query('delete from fields where document_id = $1', [documentId])
     for (const [i, userId] of recipientIds.entries()) {
-      const [r] = await tx.query<{ id: string }>(
-        'insert into recipients (document_id, user_id, sort_order) values ($1, $2, $3) returning id',
-        [documentId, userId, i],
-      )
-      recipientRowId.set(userId, r.id)
+      await tx.query('insert into recipients (document_id, user_id, sort_order) values ($1, $2, $3)', [
+        documentId,
+        userId,
+        i,
+      ])
     }
+    // Fields are shared: every recipient fills in the same fields on their own copy.
     for (const f of input.fields) {
       await tx.query(
-        `insert into fields (document_id, recipient_id, type, page, x, y, w, h, required, label)
-         values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        `insert into fields (document_id, type, page, x, y, w, h, required, label)
+         values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [
           documentId,
-          recipientRowId.get(f.recipientUserId),
           f.type,
           f.page,
           clamp01(f.x),
@@ -203,12 +202,8 @@ export async function sendDocument(documentId: string, input: DraftInput): Promi
   const saved = await saveDraft(documentId, input)
   if (saved?.error) return saved
 
-  for (const userId of new Set(input.recipientUserIds)) {
-    if (!input.fields.some((f) => f.recipientUserId === userId && f.type === 'signature')) {
-      return { error: 'Every recipient needs at least one signature field.' }
-    }
-  }
   if (input.recipientUserIds.length === 0) return { error: 'Add at least one recipient.' }
+  if (!input.fields.some((f) => f.type === 'signature')) return { error: 'Add at least one signature field.' }
 
   const doc = await queryOne<{ title: string; message: string }>(
     `update documents set status = 'sent', sent_at = now() where id = $1 and status = 'draft' returning title, message`,

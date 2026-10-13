@@ -107,6 +107,18 @@ create table if not exists audit_events (
   at timestamptz not null default now()
 );
 create index if not exists audit_events_document on audit_events (document_id, at);
+
+-- Each recipient signs their own private copy: fields are shared by the
+-- document, answers and the signed PDF belong to the recipient.
+alter table fields alter column recipient_id drop not null;
+alter table recipients add column if not exists completed_pdf bytea;
+alter table recipients add column if not exists completed_sha256 text;
+create table if not exists field_values (
+  recipient_id uuid not null references recipients(id) on delete cascade,
+  field_id uuid not null references fields(id) on delete cascade,
+  value text,
+  primary key (recipient_id, field_id)
+);
 `
 
 async function connect(): Promise<Client> {

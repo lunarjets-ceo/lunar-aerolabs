@@ -16,7 +16,7 @@ export interface Person {
 
 type EditorField = FieldInput & { key: string }
 
-const COLORS = ['#5b8def', '#e3a33b', '#4cc38a', '#d9608c', '#9b7cf0', '#3bbad4']
+const FIELD_COLOR = '#5b8def'
 
 const FIELD_TYPES: { type: FieldInput['type']; label: string; w: number; h: number }[] = [
   { type: 'signature', label: 'Signature', w: 0.24, h: 0.055 },
@@ -49,7 +49,6 @@ export function FieldEditor({
   const [title, setTitle] = useState(initialTitle)
   const [message, setMessage] = useState(initialMessage)
   const [recipients, setRecipients] = useState<string[]>(initialRecipients)
-  const [active, setActive] = useState<string | null>(initialRecipients[0] ?? null)
   const [tool, setTool] = useState<FieldInput['type']>('signature')
   const [fields, setFields] = useState<EditorField[]>(() => initialFields.map((f) => ({ ...f, key: newKey() })))
   const [selected, setSelected] = useState<string | null>(null)
@@ -57,7 +56,6 @@ export function FieldEditor({
   const [pending, startTransition] = useTransition()
   const drag = useRef<{ key: string; mode: 'move' | 'resize'; startX: number; startY: number; orig: EditorField; rect: DOMRect } | null>(null)
 
-  const color = (userId: string) => COLORS[recipients.indexOf(userId) % COLORS.length]
   const person = (id: string) => people.find((p) => p.id === id)
   const available = people.filter((p) => !recipients.includes(p.id))
   const selectedField = fields.find((f) => f.key === selected)
@@ -127,12 +125,13 @@ export function FieldEditor({
           <textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Optional" />
         </label>
 
-        <h3>Recipients</h3>
-        {recipients.length === 0 && <p className="hint">Add who needs to sign.</p>}
+        <h3>Recipients ({recipients.length})</h3>
+        <p className="hint">
+          Each person signs their own private copy. They never see anyone else's copy or signature.
+        </p>
         <ul className="recipient-list">
           {recipients.map((id) => (
-            <li key={id} className={active === id ? 'active' : ''} onClick={() => setActive(id)}>
-              <span className="swatch" style={{ background: color(id) }} />
+            <li key={id}>
               <span className="grow">
                 {person(id)?.name || person(id)?.email}
                 <small>{person(id)?.email}</small>
@@ -141,12 +140,7 @@ export function FieldEditor({
                 type="button"
                 className="icon-button"
                 aria-label="Remove recipient"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setRecipients((r) => r.filter((x) => x !== id))
-                  setFields((fs) => fs.filter((f) => f.recipientUserId !== id))
-                  if (active === id) setActive(null)
-                }}
+                onClick={() => setRecipients((r) => r.filter((x) => x !== id))}
               >
                 ×
               </button>
@@ -157,12 +151,13 @@ export function FieldEditor({
           <select
             value=""
             onChange={(e) => {
-              if (!e.target.value) return
-              setRecipients((r) => [...r, e.target.value])
-              setActive(e.target.value)
+              const value = e.target.value
+              if (!value) return
+              setRecipients((r) => (value === '__all__' ? [...r, ...available.map((p) => p.id)] : [...r, value]))
             }}
           >
             <option value="">+ Add recipient from access list…</option>
+            {available.length > 1 && <option value="__all__">Add everyone ({available.length})</option>}
             {available.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name ? `${p.name} — ${p.email}` : p.email}
@@ -189,17 +184,14 @@ export function FieldEditor({
           ))}
         </div>
         <p className="hint">
-          {active
-            ? `Click on the document to place a ${tool} field for ${person(active)?.name || person(active)?.email}.`
-            : 'Select a recipient first.'}
+          Click on the document to place a {tool} field. Fields appear on every recipient's copy, filled in with their
+          own details.
         </p>
 
         {selectedField && (
           <div className="field-inspector">
             <h3>Selected field</h3>
-            <p className="hint">
-              {selectedField.type} · {person(selectedField.recipientUserId)?.email}
-            </p>
+            <p className="hint">{selectedField.type}</p>
             {selectedField.type === 'text' && (
               <label>
                 Label
@@ -249,13 +241,11 @@ export function FieldEditor({
         <PdfPages
           url={`/sign/api/documents/${documentId}/pdf`}
           onPageClick={(page, x, y, aspect) => {
-            if (!active) return
             const def = FIELD_TYPES.find((t) => t.type === tool)!
             const w = def.w
             const h = def.h || w * aspect // square checkboxes
             const field: EditorField = {
               key: newKey(),
-              recipientUserId: active,
               type: tool,
               page,
               x: Math.min(1 - w, Math.max(0, x - w / 2)),
@@ -280,8 +270,8 @@ export function FieldEditor({
                     top: `${f.y * 100}%`,
                     width: `${f.w * 100}%`,
                     height: `${f.h * 100}%`,
-                    borderColor: color(f.recipientUserId),
-                    background: `${color(f.recipientUserId)}33`,
+                    borderColor: FIELD_COLOR,
+                    background: `${FIELD_COLOR}33`,
                   }}
                   onPointerDown={(e) => startDrag(e, f, 'move')}
                 >

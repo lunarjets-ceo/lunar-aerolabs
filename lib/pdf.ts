@@ -70,7 +70,8 @@ function toPdfBox(page: PDFPage, f: FieldRow): Box {
 
 export async function buildCompletedPdf(opts: {
   original: Uint8Array
-  documentId: string
+  /** Identifies this signer's individual copy. */
+  copyId: string
   title: string
   originalSha256: string
   fields: FieldRow[]
@@ -121,10 +122,10 @@ export async function buildCompletedPdf(opts: {
   line('LUNAR AEROLABS', { size: 10, f: bold, gap: 26, color: 0.4 })
   line('Certificate of Completion', { size: 20, f: bold, gap: 30 })
   line(`Document: ${opts.title}`)
-  line(`Envelope ID: ${opts.documentId}`)
+  line(`Copy ID: ${opts.copyId}`)
   line(`Original document SHA-256: ${opts.originalSha256}`, { gap: 26 })
 
-  line('Signers', { size: 12, f: bold, gap: 20 })
+  line('Signer', { size: 12, f: bold, gap: 20 })
   for (const s of opts.signers) {
     line(`${s.name || s.email} <${s.email}>`, { f: bold })
     line(`Signed ${fmt(s.signed_at)} from IP ${s.signed_ip ?? 'unknown'}`, { gap: 10 })

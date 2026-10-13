@@ -53,7 +53,7 @@ export default async function Dashboard() {
                     <strong>{d.title}</strong>
                     <small>From Lunar AeroLabs · {fmtDate(d.sent_at)}</small>
                   </div>
-                  <StatusBadge status={d.status === 'sent' ? d.my_status : d.status} />
+                  <StatusBadge status={d.status === 'voided' && !['signed', 'declined'].includes(d.my_status) ? 'voided' : d.my_status} />
                   <Link className="btn" href={`/sign/documents/${d.id}`}>
                     Open
                   </Link>
