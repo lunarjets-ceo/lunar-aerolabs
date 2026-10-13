@@ -7,7 +7,7 @@ import { query, queryOne, transaction } from '@/lib/db'
 import { sha256 } from '@/lib/crypto'
 import { audit } from '@/lib/audit'
 import { inspectPdf } from '@/lib/pdf'
-import { appUrl, sendEmail } from '@/lib/email'
+import { appUrl, sendEmail, SENDER_NAME } from '@/lib/email'
 import { sendAccountInvite, type Delivery } from '@/lib/invites'
 
 export type ActionResult = { error?: string; ok?: string; deliveries?: Delivery[] } | undefined
@@ -224,10 +224,10 @@ export async function sendDocument(documentId: string, input: DraftInput): Promi
   const deliveries: Delivery[] = []
   for (const r of recipients) {
     if (r.status === 'invited') {
-      deliveries.push(await sendAccountInvite(r, { documentTitle: doc.title, from: admin.name || admin.email }))
+      deliveries.push(await sendAccountInvite(r, { documentTitle: doc.title }))
     } else {
       const link = appUrl(`/sign/documents/${documentId}`)
-      const from = admin.name || admin.email
+      const from = SENDER_NAME
       const emailed = await sendEmail({
         to: r.email,
         subject: `Please sign: ${doc.title}`,

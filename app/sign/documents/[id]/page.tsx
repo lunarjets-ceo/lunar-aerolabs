@@ -20,13 +20,11 @@ export default async function SignDocumentPage({ params }: { params: Promise<{ i
     title: string
     message: string
     status: string
-    sender: string
   }>(
     `select r.id as recipient_id, r.status as my_status, r.signed_at,
-            d.title, d.message, d.status, coalesce(nullif(u.name, ''), u.email) as sender
+            d.title, d.message, d.status
        from recipients r
        join documents d on d.id = r.document_id
-       left join users u on u.id = d.created_by
       where r.document_id = $1 and r.user_id = $2 and d.status in ('sent', 'completed', 'voided')`,
     [id, user.id],
   )
@@ -54,7 +52,7 @@ export default async function SignDocumentPage({ params }: { params: Promise<{ i
           <h1>{row.title}</h1>
           <StatusBadge status={row.status === 'sent' ? row.my_status : row.status} />
         </div>
-        <p className="muted">From {row.sender}</p>
+        <p className="muted">From Lunar AeroLabs</p>
         {row.message && <blockquote className="message">{row.message}</blockquote>}
 
         {canSign ? (
@@ -73,7 +71,7 @@ export default async function SignDocumentPage({ params }: { params: Promise<{ i
               <p>You signed on {fmtDate(row.signed_at)}. We'll email you when everyone has signed.</p>
             )}
             {row.my_status === 'declined' && <p>You declined to sign this document.</p>}
-            {row.status === 'voided' && <p>The sender voided this document. No further action is needed.</p>}
+            {row.status === 'voided' && <p>Lunar AeroLabs voided this document. No further action is needed.</p>}
           </section>
         )}
       </main>

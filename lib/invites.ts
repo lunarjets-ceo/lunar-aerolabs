@@ -1,6 +1,6 @@
 import { query } from './db'
 import { randomToken, sha256 } from './crypto'
-import { appUrl, sendEmail } from './email'
+import { appUrl, sendEmail, SENDER_NAME } from './email'
 
 const INVITE_DAYS = 7
 
@@ -23,7 +23,7 @@ export interface Delivery {
 
 export async function sendAccountInvite(
   user: { id: string; email: string },
-  context?: { documentTitle: string; from: string },
+  context?: { documentTitle: string },
 ): Promise<Delivery> {
   const link = await issueInvite(user.id)
   const setup =
@@ -31,17 +31,17 @@ export async function sendAccountInvite(
   const emailed = await sendEmail({
     to: user.email,
     subject: context
-      ? `${context.from} invited you to sign "${context.documentTitle}"`
+      ? `${SENDER_NAME} invited you to sign "${context.documentTitle}"`
       : "You're invited to Lunar AeroLabs Sign",
     preheader: context
-      ? `${context.from} sent you a document to sign. Create your secure account to get started.`
+      ? `${SENDER_NAME} sent you a document to sign. Create your secure account to get started.`
       : 'Create your secure account to review and sign documents from Lunar AeroLabs.',
     eyebrow: context ? 'Signature requested' : 'Invitation',
     heading: context ? 'You have a document to sign' : 'Welcome to Lunar AeroLabs Sign',
     body: context
-      ? `${context.from} has invited you to review and sign a document.\n\n${setup}`
+      ? `${SENDER_NAME} has invited you to review and sign a document.\n\n${setup}`
       : `You've been given access to Lunar AeroLabs' secure document signing portal.\n\n${setup}`,
-    document: context ? { title: context.documentTitle, from: context.from } : undefined,
+    document: context ? { title: context.documentTitle, from: SENDER_NAME } : undefined,
     ctaLabel: 'Create your account',
     ctaUrl: link,
     note: `This personal link expires in ${INVITE_DAYS} days and works only once.`,

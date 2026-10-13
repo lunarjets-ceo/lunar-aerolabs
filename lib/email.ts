@@ -13,6 +13,9 @@ export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 }
 
+/** Signers always see documents as coming from the company, never an individual admin. */
+export const SENDER_NAME = 'Lunar AeroLabs'
+
 export function emailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
 }

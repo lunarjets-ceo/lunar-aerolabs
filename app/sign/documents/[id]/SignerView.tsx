@@ -158,7 +158,7 @@ export function SignerView({
         <div className="modal-backdrop" role="dialog" aria-modal="true">
           <div className="modal">
             <h2>Decline to sign</h2>
-            <p className="muted">The sender will be notified. You won't be able to sign this document afterwards.</p>
+            <p className="muted">Lunar AeroLabs will be notified. You won't be able to sign this document afterwards.</p>
             <textarea rows={3} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason (optional)" />
             <div className="row end">
               <button className="btn" onClick={() => setDeclining(false)}>
