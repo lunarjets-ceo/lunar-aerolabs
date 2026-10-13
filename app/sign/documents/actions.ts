@@ -87,9 +87,12 @@ export async function declineDocument(documentId: string, reason: string): Promi
     await sendEmail({
       to: owner.email,
       subject: `Declined: ${recipient.title}`,
+      preheader: `${user.name || user.email} declined to sign "${recipient.title}".`,
+      eyebrow: 'Declined',
       heading: `${user.name || user.email} declined to sign`,
-      body: reason ? `Reason: ${reason}` : 'No reason was given.',
-      ctaLabel: 'View document',
+      body: 'The envelope is on hold. Review the details, then void it and send a revised version if needed.',
+      document: { title: recipient.title, from: user.email, message: reason || 'No reason was given.', status: 'Declined', tone: 'bad' },
+      ctaLabel: 'View envelope',
       ctaUrl: appUrl(`/sign/admin/documents/${documentId}`),
     })
   }
@@ -146,9 +149,12 @@ async function finalizeIfComplete(documentId: string): Promise<void> {
     await sendEmail({
       to: email,
       subject: `Completed: ${doc.title}`,
+      preheader: `Everyone has signed "${doc.title}". Your signed copy is ready.`,
+      eyebrow: 'Completed',
       heading: 'All parties have signed',
-      body: `${doc.title} is complete. Sign in to download the signed copy with its certificate of completion.`,
-      ctaLabel: 'View signed document',
+      body: 'The document is complete. Sign in to download the final signed PDF, which includes a certificate of completion with the full audit trail.',
+      document: { title: doc.title, status: `Signed by ${signers.length} ${signers.length === 1 ? 'party' : 'parties'}`, tone: 'ok' },
+      ctaLabel: 'Download signed copy',
       ctaUrl: appUrl(`/sign/documents/${documentId}`),
     })
   }

@@ -227,13 +227,18 @@ export async function sendDocument(documentId: string, input: DraftInput): Promi
       deliveries.push(await sendAccountInvite(r, { documentTitle: doc.title, from: admin.name || admin.email }))
     } else {
       const link = appUrl(`/sign/documents/${documentId}`)
+      const from = admin.name || admin.email
       const emailed = await sendEmail({
         to: r.email,
         subject: `Please sign: ${doc.title}`,
-        heading: `${admin.name || admin.email} sent you a document to sign`,
-        body: `${doc.title}${doc.message ? `\n\n${doc.message}` : ''}`,
+        preheader: `${from} sent you "${doc.title}" to review and sign.`,
+        eyebrow: 'Signature requested',
+        heading: 'You have a document to sign',
+        body: `${from} has sent you a document to review and sign electronically.`,
+        document: { title: doc.title, from, message: doc.message || undefined },
         ctaLabel: 'Review & sign',
         ctaUrl: link,
+        note: "You'll sign in with your password and authenticator code.",
       })
       deliveries.push({ email: r.email, link, emailed })
     }

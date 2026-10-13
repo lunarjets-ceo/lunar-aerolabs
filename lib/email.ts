@@ -17,36 +17,206 @@ export function emailConfigured(): boolean {
   return Boolean(process.env.RESEND_API_KEY && process.env.EMAIL_FROM)
 }
 
-/** Returns true when the email was handed to the provider. */
-export async function sendEmail(opts: {
-  to: string
-  subject: string
+export interface EmailContent {
+  /** Inbox preview line shown after the subject. */
+  preheader: string
+  /** Small uppercase label above the heading, e.g. "Signature requested". */
+  eyebrow: string
   heading: string
+  /** Plain text; blank lines separate paragraphs. */
   body: string
+  /** Optional envelope summary card. */
+  document?: { title: string; from?: string; message?: string; status?: string; tone?: 'ok' | 'bad' }
   ctaLabel: string
   ctaUrl: string
-}): Promise<boolean> {
+  /** Small print under the button, e.g. link expiry. */
+  note?: string
+}
+
+// Email clients ignore <style> unevenly, so everything is inline and table-based.
+const FONT = `'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`
+const C = {
+  page: '#000000',
+  card: '#0b0c0e',
+  line: '#23262c',
+  inset: '#121418',
+  fg: '#f2f2ef',
+  body: '#c9cbcf',
+  dim: '#8a8c90',
+  faint: '#5f636a',
+  silver: '#edeef0',
+}
+
+function paragraphs(text: string, style: string): string {
+  return text
+    .split(/\n{2,}/)
+    .map((p) => `<p style="${style}">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+    .join('')
+}
+
+export function renderEmail(c: EmailContent): { html: string; text: string } {
+  const e = escapeHtml
+  const pStyle = `margin:0 0 16px;font-family:${FONT};font-size:15px;line-height:24px;color:${C.body};`
+
+  const documentCard = c.document
+    ? `
+          <tr>
+            <td style="padding:8px 40px 8px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.inset};border:1px solid ${C.line};border-radius:10px;">
+                <tr>
+                  <td style="padding:20px 22px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="36" valign="top" style="padding-right:14px;">
+                          <div style="width:34px;height:42px;border:1px solid #3a3e46;border-radius:4px;background:#181a1f;text-align:center;line-height:42px;font-family:${FONT};font-size:10px;letter-spacing:1px;color:${C.dim};">PDF</div>
+                        </td>
+                        <td valign="top">
+                          <div style="font-family:${FONT};font-size:16px;line-height:22px;color:${C.fg};font-weight:500;">${e(c.document.title)}</div>
+                          ${c.document.from ? `<div style="font-family:${FONT};font-size:13px;line-height:20px;color:${C.dim};padding-top:2px;">From ${e(c.document.from)}</div>` : ''}
+                          ${c.document.status ? `<div style="font-family:${FONT};font-size:11px;line-height:16px;letter-spacing:1.5px;text-transform:uppercase;color:${c.document.tone === 'bad' ? '#ff8b8f' : '#4cc38a'};padding-top:8px;">${e(c.document.status)}</div>` : ''}
+                        </td>
+                      </tr>
+                      ${
+                        c.document.message
+                          ? `<tr><td colspan="2" style="padding-top:16px;">
+                          <div style="border-left:2px solid #3a3e46;padding:2px 0 2px 14px;font-family:${FONT};font-size:14px;line-height:22px;color:${C.body};font-style:italic;">${e(c.document.message).replace(/\n/g, '<br>')}</div>
+                        </td></tr>`
+                          : ''
+                      }
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>`
+    : ''
+
+  const html = `<!DOCTYPE html>
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="supported-color-schemes" content="dark">
+  <title>${e(c.heading)}</title>
+  <!--[if mso]><style>table,td,div,p,a{font-family:Arial,Helvetica,sans-serif !important;}</style><![endif]-->
+</head>
+<body style="margin:0;padding:0;background:${C.page};-webkit-text-size-adjust:100%;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:${C.page};">${e(c.preheader)}${'&#847;&zwnj;&nbsp;'.repeat(40)}</div>
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.page};">
+    <tr>
+      <td align="center" style="padding:40px 16px;">
+        <table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:100%;max-width:560px;">
+
+          <tr>
+            <td align="center" style="padding:0 0 24px;font-family:${FONT};font-size:11px;letter-spacing:5px;text-transform:uppercase;color:#9aa0a8;">
+              Lunar&nbsp;AeroLabs
+            </td>
+          </tr>
+
+          <tr>
+            <td style="background:${C.card};border:1px solid ${C.line};border-radius:14px;">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="padding:28px 40px 0;">
+                    <img src="${appUrl('/email/jet.jpg')}" width="420" alt="" style="display:block;width:100%;max-width:420px;height:auto;border:0;">
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:28px 40px 0;">
+                    <div style="font-family:${FONT};font-size:11px;letter-spacing:2.5px;text-transform:uppercase;color:#9aa0a8;padding-bottom:12px;">${e(c.eyebrow)}</div>
+                    <h1 style="margin:0 0 18px;font-family:${FONT};font-size:26px;line-height:34px;font-weight:300;color:${C.fg};">${e(c.heading)}</h1>
+                    ${paragraphs(c.body, pStyle)}
+                  </td>
+                </tr>
+                ${documentCard}
+                <tr>
+                  <td style="padding:20px 40px 8px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td align="center" bgcolor="${C.silver}" style="border-radius:8px;">
+                          <a href="${e(c.ctaUrl)}" target="_blank" style="display:inline-block;padding:14px 30px;font-family:${FONT};font-size:15px;font-weight:600;color:#000000;text-decoration:none;border-radius:8px;">${e(c.ctaLabel)}&nbsp;&rarr;</a>
+                        </td>
+                      </tr>
+                    </table>
+                    ${c.note ? `<p style="margin:14px 0 0;font-family:${FONT};font-size:13px;line-height:20px;color:${C.dim};">${e(c.note)}</p>` : ''}
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:24px 40px 0;">
+                    <div style="border-top:1px solid ${C.line};"></div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style="padding:20px 40px 32px;">
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                      <tr>
+                        <td width="22" valign="top" style="font-family:${FONT};font-size:14px;line-height:20px;color:#9aa0a8;">&#128274;</td>
+                        <td style="font-family:${FONT};font-size:12px;line-height:19px;color:${C.dim};">
+                          Access requires your password and a code from your authenticator app. Lunar AeroLabs will never ask you for that code by email or phone.
+                        </td>
+                      </tr>
+                    </table>
+                    <p style="margin:16px 0 0;font-family:${FONT};font-size:12px;line-height:19px;color:${C.faint};">
+                      Button not working? Paste this link into your browser:<br>
+                      <a href="${e(c.ctaUrl)}" style="color:${C.dim};word-break:break-all;">${e(c.ctaUrl)}</a>
+                    </p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <tr>
+            <td align="center" style="padding:28px 20px 0;font-family:${FONT};font-size:12px;line-height:20px;color:${C.faint};">
+              Lunar AeroLabs &middot; Home of the LAGF800<br>
+              <a href="https://www.lunaraerolabs.com" style="color:${C.dim};text-decoration:none;">lunaraerolabs.com</a>
+              &nbsp;&middot;&nbsp;
+              <a href="mailto:hello@lunaraerolabs.com" style="color:${C.dim};text-decoration:none;">hello@lunaraerolabs.com</a>
+              <div style="padding-top:12px;">You're receiving this because you're a participant in a Lunar AeroLabs document. If you weren't expecting it, you can safely ignore it.</div>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`
+
+  const text = [
+    'LUNAR AEROLABS',
+    '',
+    c.heading,
+    '',
+    c.body,
+    ...(c.document
+      ? ['', `Document: ${c.document.title}`, ...(c.document.from ? [`From: ${c.document.from}`] : []), ...(c.document.message ? ['', c.document.message] : [])]
+      : []),
+    '',
+    `${c.ctaLabel}: ${c.ctaUrl}`,
+    ...(c.note ? ['', c.note] : []),
+    '',
+    'Access requires your password and a code from your authenticator app. Lunar AeroLabs will never ask you for that code.',
+  ].join('\n')
+
+  return { html, text }
+}
+
+/** Returns true when the email was handed to the provider. */
+export async function sendEmail(opts: EmailContent & { to: string; subject: string }): Promise<boolean> {
   if (!emailConfigured()) {
     console.info(`[email skipped: not configured] to=${opts.to} subject="${opts.subject}"`)
     return false
   }
-  const html = `
-  <div style="background:#000;padding:40px 0;font-family:Helvetica,Arial,sans-serif">
-    <div style="max-width:520px;margin:0 auto;background:#0b0c0e;border:1px solid #23262c;border-radius:12px;padding:36px;color:#F2F2EF">
-      <div style="letter-spacing:.3em;font-size:11px;color:#9AA0A8;text-transform:uppercase">Lunar AeroLabs</div>
-      <h1 style="font-weight:300;font-size:22px;margin:18px 0 12px">${escapeHtml(opts.heading)}</h1>
-      <p style="color:#c9cbcf;line-height:1.6;font-size:14px;white-space:pre-line">${escapeHtml(opts.body)}</p>
-      <a href="${escapeHtml(opts.ctaUrl)}" style="display:inline-block;margin-top:20px;background:#EDEEF0;color:#000;text-decoration:none;padding:12px 22px;border-radius:8px;font-size:14px">${escapeHtml(opts.ctaLabel)}</a>
-      <p style="color:#6b6f76;font-size:12px;margin-top:28px">Access requires your password and authenticator app. If you weren't expecting this, you can ignore it.</p>
-    </div>
-  </div>`
+  const { html, text } = renderEmail(opts)
   const resend = new Resend(process.env.RESEND_API_KEY)
   const { error } = await resend.emails.send({
     from: process.env.EMAIL_FROM!,
     to: opts.to,
     subject: opts.subject,
     html,
-    text: `${opts.heading}\n\n${opts.body}\n\n${opts.ctaLabel}: ${opts.ctaUrl}`,
+    text,
   })
   if (error) {
     console.error('[email failed]', error)
