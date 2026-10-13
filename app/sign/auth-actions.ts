@@ -25,8 +25,9 @@ import {
 } from '@/lib/crypto'
 import { audit } from '@/lib/audit'
 import { pendingTotpSecret } from '@/lib/mfa'
+import { sendAccountInvite } from '@/lib/invites'
 
-export type FormState = { error?: string; recoveryCodes?: string[] } | undefined
+export type FormState = { error?: string; ok?: string; recoveryCodes?: string[] } | undefined
 
 const str = (fd: FormData, key: string) => String(fd.get(key) ?? '').trim()
 const normEmail = (s: string) => s.trim().toLowerCase()
@@ -165,6 +166,34 @@ export async function acceptInvite(_: FormState, fd: FormData): Promise<FormStat
   await audit(null, user, 'account.activated')
   await startSession(user.id, 'mfa_setup')
   redirect('/sign/setup-2fa')
+}
+
+/**
+ * Self-serve replacement for a lost or expired invitation. Only emails already on
+ * the access list and not yet activated get a link, and the response is the same
+ * either way so the list can't be probed.
+ */
+export async function requestActivation(_: FormState, fd: FormData): Promise<FormState> {
+  const email = normEmail(str(fd, 'email'))
+  const { ip } = await clientInfo()
+  const done = {
+    ok: "If that email is on the Lunar AeroLabs access list and hasn't been activated yet, we've sent it a new sign-up link. Check your inbox (and spam folder).",
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Enter a valid email address.' }
+  if ((await isThrottled(`activate:${email}`, 3)) || (await isThrottled(`ip:${ip}`, 20))) {
+    return { error: THROTTLED_MESSAGE }
+  }
+  await recordFailure(`activate:${email}`)
+
+  const user = await queryOne<{ id: string; email: string }>(
+    `select id, email from users where email = $1 and status = 'invited'`,
+    [email],
+  )
+  if (user) {
+    await sendAccountInvite(user)
+    await audit(null, user, 'user.invite_self_requested')
+  }
+  return done
 }
 
 export async function setupFirstAdmin(_: FormState, fd: FormData): Promise<FormState> {
