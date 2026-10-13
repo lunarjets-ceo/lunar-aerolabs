@@ -119,6 +119,45 @@ create table if not exists field_values (
   value text,
   primary key (recipient_id, field_id)
 );
+
+-- Large file sharing: the file lives once in private Blob storage, every
+-- recipient gets their own link so each download is attributable.
+create table if not exists shared_files (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  message text not null default '',
+  file_name text not null,
+  blob_pathname text not null,
+  size_bytes bigint not null,
+  created_by uuid references users(id),
+  created_at timestamptz not null default now(),
+  disabled_at timestamptz
+);
+
+create table if not exists file_recipients (
+  id uuid primary key default gen_random_uuid(),
+  file_id uuid not null references shared_files(id) on delete cascade,
+  email text not null,
+  name text not null default '',
+  token_hash text not null unique,
+  sent_at timestamptz not null default now(),
+  revoked_at timestamptz,
+  unique (file_id, email)
+);
+
+create table if not exists file_downloads (
+  id bigserial primary key,
+  recipient_id uuid not null references file_recipients(id) on delete cascade,
+  at timestamptz not null default now(),
+  ip text,
+  city text,
+  region text,
+  country text,
+  latitude text,
+  longitude text,
+  user_agent text
+);
+create index if not exists file_downloads_recipient on file_downloads (recipient_id, at);
 `
 
 async function connect(): Promise<Client> {

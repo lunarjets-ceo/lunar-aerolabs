@@ -28,7 +28,7 @@ export function FormError({ error }: { error?: string }) {
   )
 }
 
-export function AuthShell({ title, subtitle, children }: { title: string; subtitle?: React.ReactNode; children: React.ReactNode }) {
+export function AuthShell({ title, subtitle, children }: { title: string; subtitle?: React.ReactNode; children?: React.ReactNode }) {
   return (
     <main className="auth-shell">
       <div className="auth-card">

@@ -153,7 +153,7 @@ input:focus, textarea:focus, select:focus { outline: 2px solid rgba(91, 141, 239
 .badge { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--silver-2); white-space: nowrap; }
 .badge-sent, .badge-pending, .badge-viewed, .badge-invited { color: #e3a33b; border-color: rgba(227, 163, 59, 0.35); }
 .badge-completed, .badge-signed, .badge-active { color: var(--ok); border-color: rgba(76, 195, 138, 0.35); }
-.badge-voided, .badge-declined, .badge-revoked { color: #ff8b8f; border-color: rgba(229, 72, 77, 0.35); }
+.badge-voided, .badge-declined, .badge-revoked, .badge-disabled { color: #ff8b8f; border-color: rgba(229, 72, 77, 0.35); }
 
 .table { width: 100%; border-collapse: collapse; }
 .table th { text-align: left; font-weight: 500; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-dim); padding: 8px; border-bottom: 1px solid var(--line); }

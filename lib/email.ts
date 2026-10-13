@@ -29,12 +29,17 @@ export interface EmailContent {
   /** Plain text; blank lines separate paragraphs. */
   body: string
   /** Optional envelope summary card. */
-  document?: { title: string; from?: string; message?: string; status?: string; tone?: 'ok' | 'bad' }
+  document?: { title: string; from?: string; message?: string; status?: string; tone?: 'ok' | 'bad'; kind?: string }
   ctaLabel: string
   ctaUrl: string
   /** Small print under the button, e.g. link expiry. */
   note?: string
+  /** Replaces the default sign-in security notice in the footer. */
+  security?: string
 }
+
+const DEFAULT_SECURITY =
+  'Access requires your password and a code from your authenticator app. Lunar AeroLabs will never ask you for that code by email or phone.'
 
 // Email clients ignore <style> unevenly, so everything is inline and table-based.
 const FONT = `'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif`
@@ -71,7 +76,7 @@ export function renderEmail(c: EmailContent): { html: string; text: string } {
                     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
                       <tr>
                         <td width="36" valign="top" style="padding-right:14px;">
-                          <div style="width:34px;height:42px;border:1px solid #3a3e46;border-radius:4px;background:#181a1f;text-align:center;line-height:42px;font-family:${FONT};font-size:10px;letter-spacing:1px;color:${C.dim};">PDF</div>
+                          <div style="width:34px;height:42px;border:1px solid #3a3e46;border-radius:4px;background:#181a1f;text-align:center;line-height:42px;font-family:${FONT};font-size:10px;letter-spacing:1px;color:${C.dim};">${e(c.document.kind ?? 'PDF')}</div>
                         </td>
                         <td valign="top">
                           <div style="font-family:${FONT};font-size:16px;line-height:22px;color:${C.fg};font-weight:500;">${e(c.document.title)}</div>
@@ -156,7 +161,7 @@ export function renderEmail(c: EmailContent): { html: string; text: string } {
                       <tr>
                         <td width="22" valign="top" style="font-family:${FONT};font-size:14px;line-height:20px;color:#9aa0a8;">&#128274;</td>
                         <td style="font-family:${FONT};font-size:12px;line-height:19px;color:${C.dim};">
-                          Access requires your password and a code from your authenticator app. Lunar AeroLabs will never ask you for that code by email or phone.
+                          ${e(c.security ?? DEFAULT_SECURITY)}
                         </td>
                       </tr>
                     </table>
@@ -200,7 +205,7 @@ export function renderEmail(c: EmailContent): { html: string; text: string } {
     `${c.ctaLabel}: ${c.ctaUrl}`,
     ...(c.note ? ['', c.note] : []),
     '',
-    'Access requires your password and a code from your authenticator app. Lunar AeroLabs will never ask you for that code.',
+    c.security ?? DEFAULT_SECURITY,
   ].join('\n')
 
   return { html, text }

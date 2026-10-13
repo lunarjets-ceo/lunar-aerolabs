@@ -1,0 +1,103 @@
+'use server'
+
+import { del, head } from '@vercel/blob'
+import { revalidatePath } from 'next/cache'
+import { redirect } from 'next/navigation'
+import { requireAdmin } from '@/lib/auth'
+import { query, queryOne } from '@/lib/db'
+import { audit } from '@/lib/audit'
+import { BLOB_PATH_RE, sendFileLinks } from '@/lib/files'
+import type { ActionResult } from '../actions'
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Called by the browser once its direct-to-Blob upload has finished. */
+export async function createSharedFile(input: {
+  pathname: string
+  fileName: string
+  title: string
+  message: string
+}): Promise<{ error?: string; id?: string }> {
+  const admin = await requireAdmin()
+  if (!BLOB_PATH_RE.test(input.pathname)) return { error: 'Invalid upload.' }
+  let size: number
+  try {
+    ;({ size } = await head(input.pathname))
+  } catch {
+    return { error: 'The upload could not be found in storage. Try again.' }
+  }
+
+  const fileName = input.fileName.slice(0, 200)
+  const file = await queryOne<{ id: string }>(
+    `insert into shared_files (title, message, file_name, blob_pathname, size_bytes, created_by)
+     values ($1, $2, $3, $4, $5, $6) returning id`,
+    [input.title.trim().slice(0, 200) || fileName, input.message.slice(0, 2000), fileName, input.pathname, size, admin.id],
+  )
+  await audit(null, admin, 'file.uploaded', `${fileName} (${size} bytes)`)
+  revalidatePath('/sign/admin/files')
+  return { id: file!.id }
+}
+
+/** Accepts one person per line (or comma separated): "email" or "Name <email>". */
+function parseRecipients(raw: string): { people: { email: string; name: string }[]; invalid: string[] } {
+  const seen = new Map<string, { email: string; name: string }>()
+  const invalid: string[] = []
+  for (const entry of raw.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean)) {
+    const m = entry.match(/^(.*?)\s*<([^>]+)>$/)
+    const email = (m ? m[2] : entry).trim().toLowerCase()
+    const name = (m ? m[1] : '').replace(/^["']|["']$/g, '').trim().slice(0, 120)
+    if (EMAIL_RE.test(email)) seen.set(email, { email, name })
+    else invalid.push(entry)
+  }
+  return { people: [...seen.values()], invalid }
+}
+
+export async function sendFile(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const file = await queryOne<{ id: string; title: string; message: string; file_name: string; size_bytes: string }>(
+    `select id, title, message, file_name, size_bytes from shared_files where id = $1 and disabled_at is null`,
+    [String(fd.get('fileId'))],
+  )
+  if (!file) return { error: 'This file is no longer available.' }
+
+  const { people, invalid } = parseRecipients(String(fd.get('recipients') ?? ''))
+  if (invalid.length) return { error: `Not a valid email: ${invalid.join(', ')}` }
+  if (people.length === 0) return { error: 'Add at least one email address.' }
+
+  const deliveries = await sendFileLinks(file, people)
+  await audit(null, admin, 'file.sent', `${file.title} → ${people.map((p) => p.email).join(', ')}`)
+  revalidatePath(`/sign/admin/files/${file.id}`)
+  return { ok: `Sent ${people.length} personal ${people.length === 1 ? 'link' : 'links'}.`, deliveries }
+}
+
+export async function revokeFileLink(fd: FormData): Promise<void> {
+  const admin = await requireAdmin()
+  const row = await queryOne<{ file_id: string; email: string }>(
+    `update file_recipients set revoked_at = now() where id = $1 returning file_id, email`,
+    [String(fd.get('recipientId'))],
+  )
+  if (!row) return
+  await audit(null, admin, 'file.link_revoked', row.email)
+  revalidatePath(`/sign/admin/files/${row.file_id}`)
+}
+
+/** Kills every link and removes the file from storage. Download history is kept. */
+export async function disableFile(fd: FormData): Promise<void> {
+  const admin = await requireAdmin()
+  const id = String(fd.get('fileId'))
+  const file = await queryOne<{ title: string; blob_pathname: string }>(
+    `update shared_files set disabled_at = now() where id = $1 and disabled_at is null returning title, blob_pathname`,
+    [id],
+  )
+  if (!file) return
+  await del(file.blob_pathname)
+  await audit(null, admin, 'file.disabled', file.title)
+  revalidatePath(`/sign/admin/files/${id}`)
+}
+
+export async function deleteFile(fd: FormData): Promise<void> {
+  await requireAdmin()
+  const id = String(fd.get('fileId'))
+  await query(`delete from shared_files where id = $1 and disabled_at is not null`, [id])
+  redirect('/sign/admin/files')
+}

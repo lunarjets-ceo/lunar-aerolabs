@@ -13,6 +13,7 @@ export function Header({ user }: { user: User }) {
         {user.role === 'admin' && (
           <>
             <Link href="/sign/admin">Manage documents</Link>
+            <Link href="/sign/admin/files">Shared files</Link>
             <Link href="/sign/admin/people">Access list</Link>
           </>
         )}

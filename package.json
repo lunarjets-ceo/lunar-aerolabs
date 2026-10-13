@@ -12,6 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@vercel/blob": "^2.8.1",
+    "@vercel/functions": "^3.9.11",
     "next": "^16.4.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.4.299",
