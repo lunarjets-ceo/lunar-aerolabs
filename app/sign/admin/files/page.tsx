@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/auth'
 import { query } from '@/lib/db'
 import { formatBytes } from '@/lib/files'
 import { Header, StatusBadge, fmtDate } from '@/components/Header'
-import { FileUploadForm } from './forms'
+import { DeleteFileForm, FileUploadForm } from './forms'
 
 export default async function AdminFiles() {
   const user = await requireAdmin()
@@ -57,6 +57,7 @@ export default async function AdminFiles() {
                   <Link className="btn" href={`/sign/admin/files/${f.id}`}>
                     Open
                   </Link>
+                  <DeleteFileForm fileId={f.id} small />
                 </li>
               ))}
             </ul>

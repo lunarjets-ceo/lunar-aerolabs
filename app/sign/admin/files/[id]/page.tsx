@@ -4,8 +4,8 @@ import { requireAdmin } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 import { formatBytes, HAS_SIGNED } from '@/lib/files'
 import { Header, StatusBadge, fmtDate } from '@/components/Header'
-import { deleteFile, disableFile, revokeFileLink } from '../actions'
-import { RequiredDocumentsForm, SendFileForm, type DocumentOption } from '../forms'
+import { revokeFileLink } from '../actions'
+import { DeleteFileForm, RequiredDocumentsForm, SendFileForm, type DocumentOption } from '../forms'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
@@ -105,13 +105,10 @@ export default async function AdminFilePage({ params }: { params: Promise<{ id: 
         {file.message && <p className="message">{file.message}</p>}
 
         {file.disabled_at ? (
-          <div className="row">
-            <p className="muted">Disabled {fmtDate(file.disabled_at)}. The file was removed from storage and all links stopped working.</p>
-            <form action={deleteFile}>
-              <input type="hidden" name="fileId" value={id} />
-              <button className="btn btn-danger">Delete record and history</button>
-            </form>
-          </div>
+          <p className="form-error">
+            Links were turned off {fmtDate(file.disabled_at)}, but the file is still in storage. Press Delete below to
+            finish removing it.
+          </p>
         ) : (
           <>
             <section className="panel">
@@ -224,12 +221,14 @@ export default async function AdminFilePage({ params }: { params: Promise<{ id: 
           )}
         </section>
 
-        {!file.disabled_at && (
-          <form action={disableFile}>
-            <input type="hidden" name="fileId" value={id} />
-            <button className="btn btn-danger">Disable all links and remove file from storage</button>
-          </form>
-        )}
+        <section className="panel">
+          <h2>Delete file</h2>
+          <p className="hint">
+            Removes the file from storage and deletes this page, every tester's link and the download log. Testers who
+            open their link will see that it's no longer available.
+          </p>
+          <DeleteFileForm fileId={id} />
+        </section>
       </main>
     </>
   )

@@ -3,7 +3,7 @@
 import { useActionState, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { upload } from '@vercel/blob/client'
-import { createSharedFile, sendFile, setRequiredDocuments } from './actions'
+import { createSharedFile, deleteFile, sendFile, setRequiredDocuments } from './actions'
 import { FormError, SubmitButton } from '@/components/ui'
 import { DeliveryList } from '@/components/DeliveryList'
 
@@ -129,6 +129,33 @@ export function RequiredDocumentsForm({ fileId, documents }: { fileId: string; d
       <FormError error={state?.error} />
       {state?.ok && <p className="form-ok">{state.ok}</p>}
       <SubmitButton pendingText="Saving…">Save required documents</SubmitButton>
+    </form>
+  )
+}
+
+/** Two clicks: the first only asks, so a stray click can't delete a file. */
+export function DeleteFileForm({ fileId, small }: { fileId: string; small?: boolean }) {
+  const [state, action] = useActionState(deleteFile, undefined)
+  const [confirming, setConfirming] = useState(false)
+  const size = small ? ' btn-small' : ''
+  return (
+    <form action={action} className="stack">
+      <input type="hidden" name="fileId" value={fileId} />
+      {confirming ? (
+        <div className="row">
+          <SubmitButton className={`btn btn-danger${size}`} pendingText="Deleting…">
+            Delete permanently
+          </SubmitButton>
+          <button type="button" className={`btn${size}`} onClick={() => setConfirming(false)}>
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button type="button" className={`btn btn-danger${size}`} onClick={() => setConfirming(true)}>
+          Delete
+        </button>
+      )}
+      <FormError error={state?.error} />
     </form>
   )
 }

@@ -106,23 +106,31 @@ export async function revokeFileLink(fd: FormData): Promise<void> {
   revalidatePath(`/sign/admin/files/${row.file_id}`)
 }
 
-/** Kills every link and removes the file from storage. Download history is kept. */
-export async function disableFile(fd: FormData): Promise<void> {
+/**
+ * Stops every link straight away, removes the file from storage, then drops the
+ * record and its download history. If storage can't be reached the record is
+ * kept (links stay off) so pressing Delete again can finish the job.
+ */
+export async function deleteFile(_: ActionResult, fd: FormData): Promise<ActionResult> {
   const admin = await requireAdmin()
   const id = String(fd.get('fileId'))
   const file = await queryOne<{ title: string; blob_pathname: string }>(
-    `update shared_files set disabled_at = now() where id = $1 and disabled_at is null returning title, blob_pathname`,
+    `update shared_files set disabled_at = coalesce(disabled_at, now()) where id = $1 returning title, blob_pathname`,
     [id],
   )
-  if (!file) return
-  await del(file.blob_pathname)
-  await audit(null, admin, 'file.disabled', file.title)
-  revalidatePath(`/sign/admin/files/${id}`)
-}
-
-export async function deleteFile(fd: FormData): Promise<void> {
-  await requireAdmin()
-  const id = String(fd.get('fileId'))
-  await query(`delete from shared_files where id = $1 and disabled_at is not null`, [id])
+  if (!file) return { error: 'File not found.' }
+  try {
+    await del(file.blob_pathname)
+  } catch (err) {
+    console.error('[file delete: storage]', err)
+    revalidatePath('/sign/admin/files')
+    revalidatePath(`/sign/admin/files/${id}`)
+    return {
+      error: `All links are now off, but the file couldn't be removed from storage (${(err as Error).message}). Press Delete again later to finish.`,
+    }
+  }
+  await query('delete from shared_files where id = $1', [id])
+  await audit(null, admin, 'file.deleted', file.title)
+  revalidatePath('/sign/admin/files')
   redirect('/sign/admin/files')
 }
