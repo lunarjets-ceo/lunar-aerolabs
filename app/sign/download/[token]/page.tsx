@@ -2,8 +2,15 @@ import Link from 'next/link'
 import { AuthShell } from '@/components/ui'
 import { findRecipientByToken, formatBytes } from '@/lib/files'
 
-export default async function DownloadPage({ params }: { params: Promise<{ token: string }> }) {
+export default async function DownloadPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ token: string }>
+  searchParams: Promise<{ unavailable?: string }>
+}) {
   const { token } = await params
+  const { unavailable } = await searchParams
   const r = await findRecipientByToken(token)
 
   if (!r) {
@@ -42,6 +49,11 @@ export default async function DownloadPage({ params }: { params: Promise<{ token
     <AuthShell title={r.title} subtitle={subtitle}>
       <div className="stack">
         {r.message && <p className="message">{r.message}</p>}
+        {unavailable && (
+          <p className="form-error" role="alert">
+            Downloads are temporarily unavailable. Please try again later. Your link will keep working.
+          </p>
+        )}
         <form method="post" action={`/sign/download/${encodeURIComponent(token)}/start`}>
           <button className="btn btn-primary" style={{ width: '100%' }}>
             Download

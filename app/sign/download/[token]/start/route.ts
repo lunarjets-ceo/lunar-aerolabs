@@ -9,9 +9,19 @@ import { appUrl } from '@/lib/email'
  */
 export async function POST(request: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
+  const page = appUrl(`/sign/download/${encodeURIComponent(token)}`)
   const r = await findRecipientByToken(token)
   // The page explains a dead link or a missing signature; send the tester back to it.
-  if (!r?.signed) return Response.redirect(appUrl(`/sign/download/${encodeURIComponent(token)}`), 303)
+  if (!r?.signed) return Response.redirect(page, 303)
+
+  // Only a download that can actually start is logged, so failed clicks don't count.
+  let url: string
+  try {
+    url = await presignedDownloadUrl(r.blob_pathname)
+  } catch (err) {
+    console.error('[download: storage]', err)
+    return Response.redirect(`${page}?unavailable=1`, 303)
+  }
 
   const geo = geolocation(request)
   const ip = ipAddress(request) ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
@@ -29,5 +39,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
       (request.headers.get('user-agent') ?? '').slice(0, 300),
     ],
   )
-  return Response.redirect(await presignedDownloadUrl(r.blob_pathname), 303)
+  return Response.redirect(url, 303)
 }
