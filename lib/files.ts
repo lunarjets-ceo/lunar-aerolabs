@@ -5,8 +5,8 @@ import { appUrl, sendEmail, SENDER_NAME } from './email'
 import type { Delivery } from './invites'
 
 export const MAX_FILE_BYTES = 10 * 1024 ** 3
-/** Uploads land at shared-files/<uuid>/<name> so nothing is ever overwritten. */
-export const BLOB_PATH_RE = /^shared-files\/[0-9a-f-]{36}\/[^/]{1,200}$/
+/** Uploads land at shared-files/<uuid>/<name> (or releases/…) so nothing is ever overwritten. */
+export const BLOB_PATH_RE = /^(shared-files|releases)\/[0-9a-f-]{36}\/[^/]{1,200}$/
 
 // A redirect target, not something a tester keeps: long enough to start a
 // slow download, short enough that a copied URL stops working soon after.

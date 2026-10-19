@@ -166,6 +166,62 @@ create table if not exists shared_file_documents (
   document_id uuid not null references documents(id) on delete cascade,
   primary key (file_id, document_id)
 );
+
+-- Private release repositories: a GitHub-style page per product where the
+-- alpha team picks up versioned builds. Only selected members see a repo, and
+-- they must have signed one of its required documents to download.
+create table if not exists repos (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique,
+  name text not null,
+  description text not null default '',
+  readme text not null default '',
+  created_by uuid references users(id),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists repo_members (
+  repo_id uuid not null references repos(id) on delete cascade,
+  user_id uuid not null references users(id) on delete cascade,
+  added_at timestamptz not null default now(),
+  primary key (repo_id, user_id)
+);
+
+create table if not exists repo_documents (
+  repo_id uuid not null references repos(id) on delete cascade,
+  document_id uuid not null references documents(id) on delete cascade,
+  primary key (repo_id, document_id)
+);
+
+create table if not exists repo_releases (
+  id uuid primary key default gen_random_uuid(),
+  repo_id uuid not null references repos(id) on delete cascade,
+  tag text not null,
+  title text not null default '',
+  notes text not null default '',
+  file_name text not null,
+  blob_pathname text not null,
+  size_bytes bigint not null,
+  created_by uuid references users(id),
+  created_at timestamptz not null default now(),
+  unique (repo_id, tag)
+);
+
+create table if not exists repo_downloads (
+  id bigserial primary key,
+  release_id uuid not null references repo_releases(id) on delete cascade,
+  user_id uuid not null references users(id) on delete cascade,
+  at timestamptz not null default now(),
+  ip text,
+  city text,
+  region text,
+  country text,
+  latitude text,
+  longitude text,
+  user_agent text
+);
+create index if not exists repo_downloads_release on repo_downloads (release_id, at);
+create index if not exists repo_downloads_user on repo_downloads (user_id, at);
 `
 
 async function connect(): Promise<Client> {
