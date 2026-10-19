@@ -5,6 +5,7 @@ import { query } from '@/lib/db'
 import { formatBytes } from '@/lib/files'
 import { canDownload, canView, findRepoForUser, SLUG_RE } from '@/lib/repos'
 import { Header, StatusBadge, fmtDate } from '@/components/Header'
+import { Markdown } from '@/components/Markdown'
 
 export default async function RepoPage({
   params,
@@ -112,7 +113,7 @@ export default async function RepoPage({
                         <small className="muted">{fmtDate(r.created_at)}</small>
                       </div>
                       {r.title && <h3>{r.title}</h3>}
-                      {r.notes && <p className="release-notes">{r.notes}</p>}
+                      {r.notes && <Markdown>{r.notes}</Markdown>}
                       <div className="release-asset">
                         <span>
                           {r.file_name} <small className="muted">· {formatBytes(Number(r.size_bytes))}</small>
@@ -132,7 +133,7 @@ export default async function RepoPage({
           <aside>
             <section className="panel">
               <h2>About</h2>
-              {repo.readme ? <p className="release-notes">{repo.readme}</p> : <p className="muted">No README yet.</p>}
+              {repo.readme ? <Markdown>{repo.readme}</Markdown> : <p className="muted">No README yet.</p>}
               <p className="hint">
                 This repository is private to you. Each download is logged with its time, IP address and approximate
                 location.

@@ -276,5 +276,24 @@ input:focus, textarea:focus, select:focus { outline: 2px solid rgba(91, 141, 239
 .release-list li:first-child { border-top: 0; padding-top: 4px; }
 .release-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .release-list h3 { margin: 10px 0 0; font-size: 16px; letter-spacing: 0; text-transform: none; color: var(--fg); }
-.release-notes { white-space: pre-line; color: var(--silver-1); margin: 10px 0 0; }
 .release-asset { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); }
+.markdown { color: var(--silver-1); margin-top: 10px; overflow-wrap: anywhere; }
+.markdown > :first-child { margin-top: 0; }
+.markdown > :last-child { margin-bottom: 0; }
+.markdown p, .markdown ul, .markdown ol, .markdown blockquote, .markdown pre, .markdown table { margin: 0 0 12px; }
+.markdown ul, .markdown ol { padding-left: 22px; }
+.markdown li + li { margin-top: 4px; }
+.markdown li input[type='checkbox'] { width: auto; margin: 0 6px 0 0; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 { color: var(--fg); font-weight: 600; letter-spacing: 0; text-transform: none; margin: 18px 0 8px; }
+.markdown h1 { font-size: 20px; }
+.markdown h2 { font-size: 17px; }
+.markdown h3, .markdown h4 { font-size: 15px; }
+.markdown a { color: var(--fg); }
+.markdown code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+.markdown pre { background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow-x: auto; }
+.markdown pre code { background: none; border: 0; padding: 0; }
+.markdown blockquote { border-left: 2px solid var(--line); padding: 2px 12px; color: var(--fg-dim); }
+.markdown table { border-collapse: collapse; display: block; overflow-x: auto; }
+.markdown th, .markdown td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; }
+.markdown hr { border: 0; border-top: 1px solid var(--line); margin: 16px 0; }
+.markdown img { max-width: 100%; }

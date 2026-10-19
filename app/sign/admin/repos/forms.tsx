@@ -58,7 +58,7 @@ export function EditRepoForm({ repo }: { repo: { id: string; name: string; descr
         </label>
       </div>
       <label>
-        README <span className="hint">(shown on the repository page: install steps, known issues, contacts)</span>
+        README <span className="hint">(Markdown, shown on the repository page: install steps, known issues, contacts)</span>
         <textarea name="readme" rows={8} defaultValue={repo.readme} />
       </label>
       <Result state={state} />
@@ -196,7 +196,7 @@ export function PublishReleaseForm({ repoId, suggestedTag }: { repoId: string; s
         <input name="file" type="file" required disabled={uploading} />
       </label>
       <label>
-        Release notes <span className="hint">(what changed, what to test, how to update)</span>
+        Release notes <span className="hint">(Markdown: what changed, what to test, how to update)</span>
         <textarea name="notes" rows={6} disabled={uploading} />
       </label>
       <label className="checkbox">
