@@ -34,7 +34,7 @@ export async function inspectPdf(bytes: Uint8Array): Promise<{ pageCount: number
 }
 
 // Standard fonts only cover WinAnsi; anything else would throw during drawText.
-function winAnsi(s: string): string {
+export function winAnsi(s: string): string {
   return s.replace(/[^\x20-\x7E\xA0-\xFF]/g, '?')
 }
 

@@ -5,6 +5,7 @@ import { query, queryOne } from '@/lib/db'
 import { formatBytes } from '@/lib/files'
 import { HAS_SIGNED_REPO } from '@/lib/repos'
 import { Header, StatusBadge, fmtDate } from '@/components/Header'
+import { ExportLinks } from '@/components/ExportLinks'
 import {
   DeleteReleaseForm,
   DeleteRepoForm,
@@ -70,8 +71,7 @@ export default async function AdminRepoPage({ params }: { params: Promise<{ id: 
   }>(
     `select u.id, u.email, u.name, u.status, ${HAS_SIGNED_REPO} as signed,
             cur.release_id as current_id, cur.tag as current_tag,
-            (select max(d.at) from repo_downloads d join repo_releases r on r.id = d.release_id
-              where r.repo_id = p.id and d.user_id = u.id) as last_at
+            (select max(d.at) from repo_downloads d where d.repo_id = p.id and d.user_id = u.id) as last_at
        from repo_members m
        join users u on u.id = m.user_id
        join repos p on p.id = m.repo_id
@@ -114,11 +114,9 @@ export default async function AdminRepoPage({ params }: { params: Promise<{ id: 
     longitude: string | null
     user_agent: string | null
   }>(
-    `select d.at, r.tag, u.email, u.name, d.ip, d.city, d.region, d.country, d.latitude, d.longitude, d.user_agent
-       from repo_downloads d
-       join repo_releases r on r.id = d.release_id
-       join users u on u.id = d.user_id
-      where r.repo_id = $1 order by d.at desc limit 500`,
+    `select d.at, d.tag, u.email, u.name, d.ip, d.city, d.region, d.country, d.latitude, d.longitude, d.user_agent
+       from repo_downloads d join users u on u.id = d.user_id
+      where d.repo_id = $1 order by d.at desc limit 500`,
     [id],
   )
 
@@ -247,9 +245,12 @@ export default async function AdminRepoPage({ params }: { params: Promise<{ id: 
         </section>
 
         <section className="panel">
-          <h2>Download log</h2>
+          <div className="section-head">
+            <h2>Download log</h2>
+            {downloads.length > 0 && <ExportLinks filter={`repo=${id}`} />}
+          </div>
           <p className="hint">
-            Location is approximate, derived from the IP address. VPNs and mobile carriers can place it far from the
+            Includes deleted releases. Location is approximate, derived from the IP address. VPNs and mobile carriers can place it far from the
             tester.
           </p>
           {downloads.length === 0 ? (
@@ -301,7 +302,8 @@ export default async function AdminRepoPage({ params }: { params: Promise<{ id: 
         <section className="panel">
           <h2>Delete repository</h2>
           <p className="hint">
-            Removes every release file from storage and deletes this repository, its member list and download log.
+            Removes every release file from storage and deletes this repository and its member list. Its downloads stay
+            in <Link href="/sign/admin/downloads">Download history</Link>.
           </p>
           <DeleteRepoForm repoId={id} />
         </section>

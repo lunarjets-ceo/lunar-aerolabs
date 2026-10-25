@@ -21,8 +21,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   const page = appUrl(`/sign/repos/${slug}`)
   const repo = await findRepoForUser(slug, session.user)
   if (!repo || !canDownload(repo, session.user)) return Response.redirect(page, 303)
-  const release = await queryOne<{ blob_pathname: string }>(
-    'select blob_pathname from repo_releases where id = $1 and repo_id = $2',
+  const release = await queryOne<{ blob_pathname: string; tag: string; file_name: string }>(
+    'select blob_pathname, tag, file_name from repo_releases where id = $1 and repo_id = $2',
     [releaseId, repo.id],
   )
   if (!release) return Response.redirect(page, 303)
@@ -39,11 +39,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ slu
   const geo = geolocation(request)
   const ip = ipAddress(request) ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
   await query(
-    `insert into repo_downloads (release_id, user_id, ip, city, region, country, latitude, longitude, user_agent)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `insert into repo_downloads
+       (release_id, user_id, repo_id, repo_name, repo_slug, tag, file_name, ip, city, region, country, latitude, longitude, user_agent)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
     [
       releaseId,
       session.user.id,
+      repo.id,
+      repo.name,
+      repo.slug,
+      release.tag,
+      release.file_name,
       ip,
       geo.city ?? null,
       geo.countryRegion ?? null,

@@ -26,10 +26,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ tok
   const geo = geolocation(request)
   const ip = ipAddress(request) ?? request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null
   await query(
-    `insert into file_downloads (recipient_id, ip, city, region, country, latitude, longitude, user_agent)
-     values ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    `insert into file_downloads (recipient_id, file_title, file_name, email, name, ip, city, region, country, latitude, longitude, user_agent)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
       r.recipient_id,
+      r.title,
+      r.file_name,
+      r.email,
+      r.name,
       ip,
       geo.city ?? null,
       geo.countryRegion ?? null,

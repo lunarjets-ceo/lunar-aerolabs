@@ -147,7 +147,7 @@ create table if not exists file_recipients (
 
 create table if not exists file_downloads (
   id bigserial primary key,
-  recipient_id uuid not null references file_recipients(id) on delete cascade,
+  recipient_id uuid references file_recipients(id) on delete set null,
   at timestamptz not null default now(),
   ip text,
   city text,
@@ -209,7 +209,7 @@ create table if not exists repo_releases (
 
 create table if not exists repo_downloads (
   id bigserial primary key,
-  release_id uuid not null references repo_releases(id) on delete cascade,
+  release_id uuid references repo_releases(id) on delete set null,
   user_id uuid not null references users(id) on delete cascade,
   at timestamptz not null default now(),
   ip text,
@@ -222,6 +222,41 @@ create table if not exists repo_downloads (
 );
 create index if not exists repo_downloads_release on repo_downloads (release_id, at);
 create index if not exists repo_downloads_user on repo_downloads (user_id, at);
+
+-- Download records outlive the file, release or repo they came from: each row
+-- keeps a copy of what was downloaded and by whom, and deleting the source
+-- only clears the link back to it.
+alter table file_downloads alter column recipient_id drop not null;
+alter table file_downloads add column if not exists file_title text;
+alter table file_downloads add column if not exists file_name text;
+alter table file_downloads add column if not exists email text;
+alter table file_downloads add column if not exists name text;
+alter table repo_downloads alter column release_id drop not null;
+alter table repo_downloads add column if not exists repo_id uuid references repos(id) on delete set null;
+alter table repo_downloads add column if not exists repo_name text;
+alter table repo_downloads add column if not exists repo_slug text;
+alter table repo_downloads add column if not exists tag text;
+alter table repo_downloads add column if not exists file_name text;
+create index if not exists file_downloads_at on file_downloads (at);
+create index if not exists repo_downloads_repo on repo_downloads (repo_id, at);
+do $$ begin
+  if exists (select 1 from pg_constraint where conname = 'file_downloads_recipient_id_fkey' and confdeltype = 'c') then
+    alter table file_downloads drop constraint file_downloads_recipient_id_fkey;
+    alter table file_downloads add constraint file_downloads_recipient_id_fkey
+      foreign key (recipient_id) references file_recipients(id) on delete set null;
+  end if;
+  if exists (select 1 from pg_constraint where conname = 'repo_downloads_release_id_fkey' and confdeltype = 'c') then
+    alter table repo_downloads drop constraint repo_downloads_release_id_fkey;
+    alter table repo_downloads add constraint repo_downloads_release_id_fkey
+      foreign key (release_id) references repo_releases(id) on delete set null;
+  end if;
+end $$;
+update file_downloads d set file_title = f.title, file_name = f.file_name, email = r.email, name = r.name
+  from file_recipients r join shared_files f on f.id = r.file_id
+ where r.id = d.recipient_id and d.file_title is null;
+update repo_downloads d set repo_id = p.id, repo_name = p.name, repo_slug = p.slug, tag = rr.tag, file_name = rr.file_name
+  from repo_releases rr join repos p on p.id = rr.repo_id
+ where rr.id = d.release_id and d.tag is null;
 `
 
 async function connect(): Promise<Client> {

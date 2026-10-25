@@ -108,7 +108,7 @@ export async function revokeFileLink(fd: FormData): Promise<void> {
 
 /**
  * Stops every link straight away, removes the file from storage, then drops the
- * record and its download history. If storage can't be reached the record is
+ * record and its links. Download records are kept (see /sign/admin/downloads). If storage can't be reached the record is
  * kept (links stay off) so pressing Delete again can finish the job.
  */
 export async function deleteFile(_: ActionResult, fd: FormData): Promise<ActionResult> {

@@ -161,7 +161,7 @@ export async function deleteRelease(_: ActionResult, fd: FormData): Promise<Acti
   return { ok: `Deleted ${release.tag}.` }
 }
 
-/** Removes every release file from storage, then the repo, its members and download history. */
+/** Removes every release file from storage, then the repo and its members. Download records are kept. */
 export async function deleteRepo(_: ActionResult, fd: FormData): Promise<ActionResult> {
   const admin = await requireAdmin()
   const id = String(fd.get('repoId'))

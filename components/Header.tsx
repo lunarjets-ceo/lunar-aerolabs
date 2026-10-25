@@ -17,6 +17,7 @@ export function Header({ user }: { user: User }) {
             <Link href="/sign/admin/files">Shared files</Link>
             <Link href="/sign/admin/repos">Manage repos</Link>
             <Link href="/sign/admin/people">Access list</Link>
+            <Link href="/sign/admin/downloads">Download history</Link>
           </>
         )}
       </nav>

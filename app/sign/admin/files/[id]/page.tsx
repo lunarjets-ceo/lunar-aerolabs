@@ -4,6 +4,7 @@ import { requireAdmin } from '@/lib/auth'
 import { query, queryOne } from '@/lib/db'
 import { formatBytes, HAS_SIGNED } from '@/lib/files'
 import { Header, StatusBadge, fmtDate } from '@/components/Header'
+import { ExportLinks } from '@/components/ExportLinks'
 import { revokeFileLink } from '../actions'
 import { DeleteFileForm, RequiredDocumentsForm, SendFileForm, type DocumentOption } from '../forms'
 
@@ -180,7 +181,10 @@ export default async function AdminFilePage({ params }: { params: Promise<{ id: 
         </section>
 
         <section className="panel">
-          <h2>Download log</h2>
+          <div className="section-head">
+            <h2>Download log</h2>
+            {downloads.length > 0 && <ExportLinks filter={`file=${id}`} />}
+          </div>
           <p className="hint">Location is approximate, derived from the IP address. VPNs and mobile carriers can place it far from the tester.</p>
           {downloads.length === 0 ? (
             <p className="muted">No downloads yet.</p>
@@ -224,8 +228,9 @@ export default async function AdminFilePage({ params }: { params: Promise<{ id: 
         <section className="panel">
           <h2>Delete file</h2>
           <p className="hint">
-            Removes the file from storage and deletes this page, every tester's link and the download log. Testers who
-            open their link will see that it's no longer available.
+            Removes the file from storage and deletes this page and every tester's link. Testers who open their link will
+            see that it's no longer available. Its downloads stay in{' '}
+            <Link href="/sign/admin/downloads">Download history</Link>.
           </p>
           <DeleteFileForm fileId={id} />
         </section>
