@@ -2,7 +2,7 @@ import { requireAdmin } from '@/lib/auth'
 import { query } from '@/lib/db'
 import { Header, StatusBadge, fmtDate } from '@/components/Header'
 import { resetAuthenticator, restoreUser, revokeUser } from '../actions'
-import { InviteForm, ResendInviteButton } from './forms'
+import { EditPersonForm, InviteForm, ResendInviteButton } from './forms'
 
 export default async function PeoplePage() {
   const admin = await requireAdmin()
@@ -49,6 +49,7 @@ export default async function PeoplePage() {
                   <td>
                     <strong>{p.name || '—'}</strong>
                     <small>{p.email}</small>
+                    <EditPersonForm key={`${p.email}|${p.name}`} userId={p.id} email={p.email} name={p.name} />
                   </td>
                   <td>{p.role}</td>
                   <td>

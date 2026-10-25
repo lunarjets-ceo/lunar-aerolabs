@@ -160,6 +160,9 @@ input:focus, textarea:focus, select:focus { outline: 2px solid rgba(91, 141, 239
 .table td { padding: 12px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
 .table.compact td { padding: 6px 8px; font-size: 12px; }
 .table tr.dim td { opacity: 0.5; }
+.edit-person { margin-top: 4px; font-size: 12px; }
+.edit-person summary { cursor: pointer; color: var(--fg-dim); }
+.edit-person form { margin-top: 8px; max-width: 320px; }
 .table td.actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 
 .delivery-list { list-style: none; padding: 0; margin: 0 0 16px; display: flex; flex-direction: column; gap: 12px; }

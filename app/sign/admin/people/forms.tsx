@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
-import { inviteUser, resendInvite } from '../actions'
+import { inviteUser, resendInvite, updateUser } from '../actions'
 import { FormError, SubmitButton } from '@/components/ui'
 import { DeliveryList } from '@/components/DeliveryList'
 
@@ -31,6 +31,32 @@ export function InviteForm() {
       {state?.deliveries && <DeliveryList deliveries={state.deliveries} />}
       <SubmitButton pendingText="Adding…">Add & send invitation</SubmitButton>
     </form>
+  )
+}
+
+/** Fixes a name or email without re-inviting; nothing is emailed. */
+export function EditPersonForm({ userId, email, name }: { userId: string; email: string; name: string }) {
+  const [state, action] = useActionState(updateUser, undefined)
+  return (
+    <details className="edit-person">
+      <summary>Edit</summary>
+      <form action={action} className="stack">
+        <input type="hidden" name="userId" value={userId} />
+        <label>
+          Email
+          <input name="email" type="email" defaultValue={email} required />
+        </label>
+        <label>
+          Name
+          <input name="name" defaultValue={name} />
+        </label>
+        <FormError error={state?.error} />
+        {state?.ok && <p className="form-ok">{state.ok}</p>}
+        <SubmitButton className="btn btn-small" pendingText="Saving…">
+          Save
+        </SubmitButton>
+      </form>
+    </details>
   )
 }
 

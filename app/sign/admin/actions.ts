@@ -52,6 +52,41 @@ export async function resendInvite(_: ActionResult, fd: FormData): Promise<Actio
   return { deliveries: [delivery] }
 }
 
+/**
+ * Corrects a person's name or email in place. Signatures and repo access hang
+ * off the user id, so nothing needs re-signing; shared-file links are matched
+ * by email and move with it.
+ */
+export async function updateUser(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const userId = String(fd.get('userId'))
+  const email = String(fd.get('email') ?? '').trim().toLowerCase()
+  const name = String(fd.get('name') ?? '').trim().slice(0, 120)
+  if (!EMAIL_RE.test(email)) return { error: 'Enter a valid email address.' }
+
+  const user = await queryOne<{ email: string }>('select email from users where id = $1', [userId])
+  if (!user) return { error: 'That person is no longer on the access list.' }
+  if (email !== user.email) {
+    const taken = await queryOne('select 1 from users where email = $1 and id <> $2', [email, userId])
+    if (taken) return { error: `${email} is already on the access list.` }
+  }
+
+  await transaction(async (tx) => {
+    await tx.query('update users set email = $2, name = $3 where id = $1', [userId, email, name])
+    if (email !== user.email) {
+      await tx.query(
+        `update file_recipients r set email = $2
+          where r.email = $1
+            and not exists (select 1 from file_recipients o where o.file_id = r.file_id and o.email = $2)`,
+        [user.email, email],
+      )
+    }
+  })
+  await audit(null, admin, 'user.updated', email === user.email ? email : `${user.email} → ${email}`)
+  revalidatePath('/sign/admin/people')
+  return { ok: 'Saved.' }
+}
+
 export async function revokeUser(fd: FormData): Promise<void> {
   const admin = await requireAdmin()
   const userId = String(fd.get('userId'))
