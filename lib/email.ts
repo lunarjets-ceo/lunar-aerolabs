@@ -1,4 +1,11 @@
 import { Resend } from 'resend'
+import type { Element, Root } from 'hast'
+import rehypeStringify from 'rehype-stringify'
+import remarkGfm from 'remark-gfm'
+import remarkParse from 'remark-parse'
+import remarkRehype from 'remark-rehype'
+import { unified } from 'unified'
+import { visit } from 'unist-util-visit'
 
 export function appUrl(path = ''): string {
   const base =
@@ -29,7 +36,16 @@ export interface EmailContent {
   /** Plain text; blank lines separate paragraphs. */
   body: string
   /** Optional envelope summary card. */
-  document?: { title: string; from?: string; message?: string; status?: string; tone?: 'ok' | 'bad'; kind?: string }
+  document?: {
+    title: string
+    from?: string
+    message?: string
+    /** Render `message` as Markdown (release notes) instead of a quoted note. */
+    markdown?: boolean
+    status?: string
+    tone?: 'ok' | 'bad'
+    kind?: string
+  }
   ctaLabel: string
   ctaUrl: string
   /** Small print under the button, e.g. link expiry. */
@@ -62,6 +78,52 @@ function paragraphs(text: string, style: string): string {
     .join('')
 }
 
+// Email clients drop <style>, so every Markdown element gets its styles inline.
+const MD_STYLES: Record<string, string> = {
+  p: 'margin:0 0 12px;',
+  h1: `margin:16px 0 8px;font-size:18px;line-height:24px;font-weight:600;color:${C.fg};`,
+  h2: `margin:16px 0 8px;font-size:16px;line-height:22px;font-weight:600;color:${C.fg};`,
+  h3: `margin:14px 0 6px;font-size:14px;line-height:20px;font-weight:600;color:${C.fg};`,
+  h4: `margin:14px 0 6px;font-size:14px;line-height:20px;font-weight:600;color:${C.fg};`,
+  ul: 'margin:0 0 12px;padding-left:20px;',
+  ol: 'margin:0 0 12px;padding-left:20px;',
+  li: 'margin:0 0 4px;',
+  a: `color:${C.fg};text-decoration:underline;`,
+  strong: `color:${C.fg};font-weight:600;`,
+  code: `font-family:Menlo,Consolas,monospace;font-size:12px;background:#1b1e24;border-radius:4px;padding:1px 5px;color:${C.fg};`,
+  pre: `margin:0 0 12px;padding:12px;background:#1b1e24;border-radius:8px;overflow-x:auto;white-space:pre-wrap;`,
+  blockquote: `margin:0 0 12px;padding:2px 0 2px 12px;border-left:2px solid #3a3e46;color:${C.dim};`,
+  table: 'margin:0 0 12px;border-collapse:collapse;',
+  th: `padding:6px 10px;border:1px solid ${C.line};text-align:left;color:${C.fg};`,
+  td: `padding:6px 10px;border:1px solid ${C.line};text-align:left;`,
+  hr: `border:0;border-top:1px solid ${C.line};margin:14px 0;`,
+  img: 'max-width:100%;height:auto;',
+}
+
+function inlineEmailStyles() {
+  return (tree: Root) => {
+    visit(tree, 'element', (node: Element, index, parent) => {
+      // Most clients strip form controls, so task-list boxes become characters.
+      if (node.tagName === 'input' && parent && index !== undefined) {
+        parent.children[index] = { type: 'text', value: node.properties.checked ? '\u2611' : '\u2610' }
+        return
+      }
+      let style = MD_STYLES[node.tagName]
+      // Code inside a block already sits on the <pre> background.
+      if (node.tagName === 'code' && parent?.type === 'element' && parent.tagName === 'pre') style = 'font-family:Menlo,Consolas,monospace;font-size:12px;'
+      if (style) node.properties.style = style
+      if (node.tagName === 'a') node.properties.target = '_blank'
+    })
+  }
+}
+
+/** GitHub-flavored Markdown to email-safe HTML. Raw HTML in the source is dropped, not rendered. */
+export function markdownToEmailHtml(markdown: string): string {
+  return String(
+    unified().use(remarkParse).use(remarkGfm).use(remarkRehype).use(inlineEmailStyles).use(rehypeStringify).processSync(markdown),
+  )
+}
+
 export function renderEmail(c: EmailContent): { html: string; text: string } {
   const e = escapeHtml
   const pStyle = `margin:0 0 16px;font-family:${FONT};font-size:15px;line-height:24px;color:${C.body};`
@@ -87,7 +149,11 @@ export function renderEmail(c: EmailContent): { html: string; text: string } {
                       ${
                         c.document.message
                           ? `<tr><td colspan="2" style="padding-top:16px;">
-                          <div style="border-left:2px solid #3a3e46;padding:2px 0 2px 14px;font-family:${FONT};font-size:14px;line-height:22px;color:${C.body};font-style:italic;">${e(c.document.message).replace(/\n/g, '<br>')}</div>
+                          ${
+                            c.document.markdown
+                              ? `<div style="font-family:${FONT};font-size:14px;line-height:22px;color:${C.body};">${markdownToEmailHtml(c.document.message)}</div>`
+                              : `<div style="border-left:2px solid #3a3e46;padding:2px 0 2px 14px;font-family:${FONT};font-size:14px;line-height:22px;color:${C.body};font-style:italic;">${e(c.document.message).replace(/\n/g, '<br>')}</div>`
+                          }
                         </td></tr>`
                           : ''
                       }

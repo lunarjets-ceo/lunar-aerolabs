@@ -84,6 +84,7 @@ export async function announceRelease(
         title: release.title || release.tag,
         from: `${release.file_name} · ${formatBytes(Number(release.size_bytes))}`,
         message: release.notes || undefined,
+        markdown: true,
         kind: 'FILE',
       },
       ctaLabel: 'Open repository',
