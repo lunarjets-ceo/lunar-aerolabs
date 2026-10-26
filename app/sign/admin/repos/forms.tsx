@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { upload } from '@vercel/blob/client'
+import { uploadErrorMessage } from '@/lib/upload-errors'
 import { createRelease, createRepo, deleteRelease, deleteRepo, setRepoDocuments, setRepoMembers, updateRepo } from './actions'
 import type { ActionResult } from '../actions'
 import { FormError, SubmitButton } from '@/components/ui'
@@ -173,7 +174,7 @@ export function PublishReleaseForm({ repoId, suggestedTag }: { repoId: string; s
       setState(result)
       if (!result.error) router.refresh()
     } catch (err) {
-      setState({ error: (err as Error).message || 'Upload failed.' })
+      setState({ error: uploadErrorMessage(err) })
     }
     setProgress(null)
   }

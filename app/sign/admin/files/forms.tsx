@@ -3,6 +3,7 @@
 import { useActionState, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { upload } from '@vercel/blob/client'
+import { uploadErrorMessage } from '@/lib/upload-errors'
 import { createSharedFile, deleteFile, sendFile, setRequiredDocuments } from './actions'
 import { FormError, SubmitButton } from '@/components/ui'
 import { DeliveryList } from '@/components/DeliveryList'
@@ -34,7 +35,7 @@ export function FileUploadForm() {
       if (result.error) throw new Error(result.error)
       router.push(`/sign/admin/files/${result.id}`)
     } catch (err) {
-      setError((err as Error).message || 'Upload failed.')
+      setError(uploadErrorMessage(err))
       setProgress(null)
     }
   }
