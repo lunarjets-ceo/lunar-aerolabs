@@ -303,3 +303,4 @@ input:focus, textarea:focus, select:focus { outline: 2px solid rgba(91, 141, 239
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
 .section-head h2 { margin: 0; }
 .export-links { display: flex; gap: 6px; }
+.location-notice { margin: 0 0 12px; padding: 12px 14px; border-left: 2px solid #e3a33b; background: var(--panel-2); border-radius: 0 8px 8px 0; line-height: 1.5; }

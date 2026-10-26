@@ -38,7 +38,7 @@ create table if not exists recovery_codes (
 create table if not exists sessions (
   id_hash text primary key,
   user_id uuid not null references users(id) on delete cascade,
-  stage text not null check (stage in ('mfa_setup', 'mfa', 'full')),
+  stage text not null check (stage in ('mfa_setup', 'mfa', 'consent', 'full')),
   expires_at timestamptz not null,
   created_at timestamptz not null default now(),
   ip text,
@@ -249,6 +249,16 @@ do $$ begin
     alter table repo_downloads drop constraint repo_downloads_release_id_fkey;
     alter table repo_downloads add constraint repo_downloads_release_id_fkey
       foreign key (release_id) references repo_releases(id) on delete set null;
+  end if;
+end $$;
+
+-- Signing in now stops at a location notice ('consent') before the full session.
+do $$ begin
+  if not exists (select 1 from pg_constraint where conname = 'sessions_stage_check'
+                  and pg_get_constraintdef(oid) like '%consent%') then
+    alter table sessions drop constraint if exists sessions_stage_check;
+    alter table sessions add constraint sessions_stage_check
+      check (stage in ('mfa_setup', 'mfa', 'consent', 'full'));
   end if;
 end $$;
 update file_downloads d set file_title = f.title, file_name = f.file_name, email = r.email, name = r.name

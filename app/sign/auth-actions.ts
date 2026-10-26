@@ -1,5 +1,6 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { query, queryOne, transaction } from '@/lib/db'
 import {
@@ -94,9 +95,9 @@ export async function verifySecondFactor(_: FormState, fd: FormData): Promise<Fo
   }
 
   await clearFailures(key)
-  await startSession(user.id, 'full')
+  await startSession(user.id, 'consent')
   await audit(null, user, 'login.success', method)
-  redirect('/sign')
+  redirect('/sign/location-notice')
 }
 
 export async function confirmTotpSetup(_: FormState, fd: FormData): Promise<FormState> {
@@ -132,9 +133,33 @@ export async function confirmTotpSetup(_: FormState, fd: FormData): Promise<Form
 export async function finishEnrollment(): Promise<void> {
   const user = await requireStage('mfa_setup')
   if (!user.totp_enabled) redirect('/sign/setup-2fa')
-  await startSession(user.id, 'full')
+  await startSession(user.id, 'consent')
   await audit(null, user, 'login.success', 'authenticator enrollment')
+  redirect('/sign/location-notice')
+}
+
+/** Approximate location from Vercel's IP geolocation headers; empty when running locally. */
+async function approximateLocation(): Promise<string> {
+  const h = await headers()
+  const part = (name: string) => decodeURIComponent(h.get(name) ?? '')
+  return [part('x-vercel-ip-city'), part('x-vercel-ip-country-region'), part('x-vercel-ip-country')]
+    .filter(Boolean)
+    .join(', ')
+}
+
+/** Every sign-in ends at the location notice; only agreeing grants a full session. */
+export async function acceptLocationNotice(): Promise<void> {
+  const user = await requireStage('consent')
+  await startSession(user.id, 'full')
+  await audit(null, user, 'location.consented', (await approximateLocation()) || 'location unknown')
   redirect('/sign')
+}
+
+export async function declineLocationNotice(): Promise<void> {
+  const user = await requireStage('consent')
+  await audit(null, user, 'location.declined')
+  await endSession()
+  redirect('/sign/login?declined=1')
 }
 
 export async function acceptInvite(_: FormState, fd: FormData): Promise<FormState> {

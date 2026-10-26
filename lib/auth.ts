@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation'
 import { query, queryOne } from './db'
 import { randomToken, sha256 } from './crypto'
 
-export type Stage = 'mfa_setup' | 'mfa' | 'full'
+export type Stage = 'mfa_setup' | 'mfa' | 'consent' | 'full'
 
 export interface User {
   id: string
@@ -23,7 +23,7 @@ const isProd = process.env.NODE_ENV === 'production'
 const COOKIE = isProd ? '__Host-la_session' : 'la_session'
 
 // Partial sessions (password ok, authenticator not yet passed) are short-lived.
-const LIFETIME_MIN: Record<Stage, number> = { mfa_setup: 15, mfa: 10, full: 12 * 60 }
+const LIFETIME_MIN: Record<Stage, number> = { mfa_setup: 15, mfa: 10, consent: 10, full: 12 * 60 }
 
 export async function clientInfo() {
   const h = await headers()
@@ -78,6 +78,7 @@ export async function getSession(): Promise<Session | null> {
 function pathForStage(stage: Stage | undefined): string {
   if (stage === 'mfa_setup') return '/sign/setup-2fa'
   if (stage === 'mfa') return '/sign/verify'
+  if (stage === 'consent') return '/sign/location-notice'
   return '/sign/login'
 }
 
