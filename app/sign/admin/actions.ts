@@ -8,7 +8,7 @@ import { sha256 } from '@/lib/crypto'
 import { audit } from '@/lib/audit'
 import { inspectPdf } from '@/lib/pdf'
 import { appUrl, sendEmail, SENDER_NAME } from '@/lib/email'
-import { sendAccountInvite, type Delivery } from '@/lib/invites'
+import { sendAccountInvite, sendPasswordReset, type Delivery } from '@/lib/invites'
 
 export type ActionResult = { error?: string; ok?: string; deliveries?: Delivery[] } | undefined
 
@@ -52,6 +52,19 @@ export async function resendInvite(_: ActionResult, fd: FormData): Promise<Actio
   return { deliveries: [delivery] }
 }
 
+/** Emails an active user a link to choose a new password; their authenticator stays enrolled. */
+export async function sendPasswordResetLink(_: ActionResult, fd: FormData): Promise<ActionResult> {
+  const admin = await requireAdmin()
+  const user = await queryOne<{ id: string; email: string }>(
+    `select id, email from users where id = $1 and status = 'active'`,
+    [String(fd.get('userId'))],
+  )
+  if (!user) return { error: 'Only active accounts can reset their password.' }
+  const delivery = await sendPasswordReset(user, 'admin')
+  await audit(null, admin, 'user.password_reset_sent', user.email)
+  return { deliveries: [delivery] }
+}
+
 /**
  * Corrects a person's name or email in place. Signatures and repo access hang
  * off the user id, so nothing needs re-signing; shared-file links are matched
@@ -92,7 +105,8 @@ export async function revokeUser(fd: FormData): Promise<void> {
   const userId = String(fd.get('userId'))
   if (userId === admin.id) return
   const user = await queryOne<{ email: string }>(
-    `update users set status = 'revoked', invite_token_hash = null where id = $1 returning email`,
+    `update users set status = 'revoked', invite_token_hash = null, reset_token_hash = null
+      where id = $1 returning email`,
     [userId],
   )
   await query('delete from sessions where user_id = $1', [userId])

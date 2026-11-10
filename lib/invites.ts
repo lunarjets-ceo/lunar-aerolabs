@@ -48,3 +48,38 @@ export async function sendAccountInvite(
   })
   return { email: user.email, link, emailed }
 }
+
+const RESET_HOURS = 2
+
+/** Issues a fresh single-use password reset link (invalidating any previous one). */
+export async function issuePasswordReset(userId: string): Promise<string> {
+  const token = randomToken()
+  await query(
+    `update users set reset_token_hash = $2, reset_expires_at = now() + make_interval(hours => $3)
+      where id = $1 and status = 'active'`,
+    [userId, sha256(token), RESET_HOURS],
+  )
+  return appUrl(`/sign/reset-password?token=${token}`)
+}
+
+export async function sendPasswordReset(
+  user: { id: string; email: string },
+  requestedBy: 'admin' | 'self',
+): Promise<Delivery> {
+  const link = await issuePasswordReset(user.id)
+  const emailed = await sendEmail({
+    to: user.email,
+    subject: 'Reset your Lunar AeroLabs Sign password',
+    preheader: 'Use this link to choose a new password for your Lunar AeroLabs Sign account.',
+    eyebrow: 'Password reset',
+    heading: 'Choose a new password',
+    body:
+      requestedBy === 'admin'
+        ? 'A Lunar AeroLabs administrator sent you a link to reset your password.\n\nYour authenticator app stays connected, so you will still need a code from it to sign in.'
+        : "We received a request to reset your password. If it wasn't you, you can ignore this email and your password won't change.\n\nYour authenticator app stays connected, so you will still need a code from it to sign in.",
+    ctaLabel: 'Reset password',
+    ctaUrl: link,
+    note: `This personal link expires in ${RESET_HOURS} hours and works only once.`,
+  })
+  return { email: user.email, link, emailed }
+}

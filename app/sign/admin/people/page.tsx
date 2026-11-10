@@ -2,7 +2,7 @@ import { requireAdmin } from '@/lib/auth'
 import { query } from '@/lib/db'
 import { Header, StatusBadge, fmtDate } from '@/components/Header'
 import { resetAuthenticator, restoreUser, revokeUser } from '../actions'
-import { EditPersonForm, InviteForm, ResendInviteButton } from './forms'
+import { EditPersonForm, InviteForm, ResendInviteButton, SendPasswordResetButton } from './forms'
 
 export default async function PeoplePage() {
   const admin = await requireAdmin()
@@ -59,6 +59,7 @@ export default async function PeoplePage() {
                   <td>{fmtDate(p.created_at)}</td>
                   <td className="actions">
                     {p.id !== admin.id && p.status === 'invited' && <ResendInviteButton userId={p.id} />}
+                    {p.id !== admin.id && p.status === 'active' && <SendPasswordResetButton userId={p.id} />}
                     {p.id !== admin.id && p.status === 'active' && p.totp_enabled && (
                       <form action={resetAuthenticator}>
                         <input type="hidden" name="userId" value={p.id} />

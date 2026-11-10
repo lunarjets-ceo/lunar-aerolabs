@@ -261,6 +261,9 @@ do $$ begin
       check (stage in ('mfa_setup', 'mfa', 'consent', 'full'));
   end if;
 end $$;
+-- Password resets use their own single-use token so they never collide with invitations.
+alter table users add column if not exists reset_token_hash text;
+alter table users add column if not exists reset_expires_at timestamptz;
 update file_downloads d set file_title = f.title, file_name = f.file_name, email = r.email, name = r.name
   from file_recipients r join shared_files f on f.id = r.file_id
  where r.id = d.recipient_id and d.file_title is null;

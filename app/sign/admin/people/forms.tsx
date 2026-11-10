@@ -1,7 +1,7 @@
 'use client'
 
 import { useActionState } from 'react'
-import { inviteUser, resendInvite, updateUser } from '../actions'
+import { inviteUser, resendInvite, sendPasswordResetLink, updateUser } from '../actions'
 import { FormError, SubmitButton } from '@/components/ui'
 import { DeliveryList } from '@/components/DeliveryList'
 
@@ -67,6 +67,20 @@ export function ResendInviteButton({ userId }: { userId: string }) {
       <input type="hidden" name="userId" value={userId} />
       <SubmitButton className="btn btn-small" pendingText="Sending…">
         Resend invite
+      </SubmitButton>
+      <FormError error={state?.error} />
+      {state?.deliveries && <DeliveryList deliveries={state.deliveries} />}
+    </form>
+  )
+}
+
+export function SendPasswordResetButton({ userId }: { userId: string }) {
+  const [state, action] = useActionState(sendPasswordResetLink, undefined)
+  return (
+    <form action={action}>
+      <input type="hidden" name="userId" value={userId} />
+      <SubmitButton className="btn btn-small" pendingText="Sending…">
+        Send password reset
       </SubmitButton>
       <FormError error={state?.error} />
       {state?.deliveries && <DeliveryList deliveries={state.deliveries} />}

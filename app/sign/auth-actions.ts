@@ -26,7 +26,7 @@ import {
 } from '@/lib/crypto'
 import { audit } from '@/lib/audit'
 import { pendingTotpSecret } from '@/lib/mfa'
-import { sendAccountInvite } from '@/lib/invites'
+import { sendAccountInvite, sendPasswordReset } from '@/lib/invites'
 
 export type FormState = { error?: string; ok?: string; recoveryCodes?: string[] } | undefined
 
@@ -219,6 +219,65 @@ export async function requestActivation(_: FormState, fd: FormData): Promise<For
     await audit(null, user, 'user.invite_self_requested')
   }
   return done
+}
+
+/**
+ * Self-serve "forgot password". Active accounts get a reset link, accounts still
+ * awaiting activation get a fresh invitation, and the response never says which.
+ */
+export async function requestPasswordReset(_: FormState, fd: FormData): Promise<FormState> {
+  const email = normEmail(str(fd, 'email'))
+  const { ip } = await clientInfo()
+  const done = {
+    ok: "If that email is on the Lunar AeroLabs access list, we've sent it a link to set a new password. Check your inbox (and spam folder).",
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: 'Enter a valid email address.' }
+  if ((await isThrottled(`reset:${email}`, 3)) || (await isThrottled(`ip:${ip}`, 20))) {
+    return { error: THROTTLED_MESSAGE }
+  }
+  await recordFailure(`reset:${email}`)
+
+  const user = await queryOne<{ id: string; email: string; status: string }>(
+    `select id, email, status from users where email = $1 and status in ('active', 'invited')`,
+    [email],
+  )
+  if (user?.status === 'active') {
+    await sendPasswordReset(user, 'self')
+    await audit(null, user, 'user.password_reset_requested')
+  } else if (user) {
+    await sendAccountInvite(user)
+    await audit(null, user, 'user.invite_self_requested')
+  }
+  return done
+}
+
+/** Sets a new password from a reset link. Every existing session is ended; 2FA stays enrolled. */
+export async function resetPassword(_: FormState, fd: FormData): Promise<FormState> {
+  const token = str(fd, 'token')
+  const password = String(fd.get('password') ?? '')
+  const { ip } = await clientInfo()
+
+  if (await isThrottled(`ip:${ip}`, 20)) return { error: THROTTLED_MESSAGE }
+  const problem = passwordProblem(password)
+  if (problem) return { error: problem }
+  if (password !== String(fd.get('confirm') ?? '')) return { error: 'Passwords do not match.' }
+
+  const user = await queryOne<{ id: string; email: string }>(
+    `update users
+        set password_hash = $2, reset_token_hash = null, reset_expires_at = null
+      where reset_token_hash = $1 and status = 'active' and reset_expires_at > now()
+      returning id, email`,
+    [sha256(token), await hashPassword(password)],
+  )
+  if (!user) {
+    await recordFailure(`ip:${ip}`)
+    return { error: 'This reset link is invalid or has expired. Request a new one from the sign-in page.' }
+  }
+
+  await query('delete from sessions where user_id = $1', [user.id])
+  await clearFailures(`login:${user.email}`)
+  await audit(null, user, 'user.password_reset')
+  redirect('/sign/login?reset=1')
 }
 
 export async function setupFirstAdmin(_: FormState, fd: FormData): Promise<FormState> {
